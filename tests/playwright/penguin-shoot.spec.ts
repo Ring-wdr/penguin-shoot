@@ -28,8 +28,8 @@ test('launches, records distance, and resets', async ({ page }) => {
   await expect(page.locator('#distance')).toHaveText('0 m');
 });
 
-test('mobile viewport keeps HUD readable and prevents touch scrolling during aim', async ({ page, isMobile }) => {
-  test.skip(!isMobile, 'Mobile touch-scroll smoke coverage only runs in the mobile project.');
+test('mobile viewport keeps HUD readable and touch pointer cancel leaves fixed app unscrolled', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Mobile touch-pointer smoke coverage only runs in the mobile project.');
 
   await page.goto('/');
   await expect(page.locator('#hud')).toBeVisible();
@@ -41,6 +41,8 @@ test('mobile viewport keeps HUD readable and prevents touch scrolling during aim
   if (!box) {
     return;
   }
+
+  await expect(canvas).toHaveCSS('touch-action', 'none');
 
   const beforeScroll = await page.evaluate(() => window.scrollY);
   await canvas.evaluate((element) => {
