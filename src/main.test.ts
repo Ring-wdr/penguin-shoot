@@ -108,6 +108,7 @@ async function bootApp(): Promise<BootContext> {
     bestDistance: 0,
     flightTime: 0,
     lastImpactTime: -1,
+    mapItems: [],
   };
   const update = vi.fn();
   const dispose = vi.fn();

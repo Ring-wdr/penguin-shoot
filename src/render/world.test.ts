@@ -5,9 +5,12 @@ import {
   applyCameraFocus,
   calculateCameraBounds,
   calculateCameraTargetX,
+  calculateWorldChunkCenters,
+  createMapItemVisual,
   createTrajectoryPoints,
   shouldRebuildLineGeometry,
 } from './world';
+import type { MapItem } from '../simulation/game';
 
 describe('render world helpers', () => {
   it('frames the launcher on the left side before the penguin moves forward', () => {
@@ -17,6 +20,10 @@ describe('render world helpers', () => {
 
   it('follows forward progress with a readable lead', () => {
     expect(calculateCameraTargetX(20)).toBe(14);
+  });
+
+  it('keeps the launcher visible in narrow mobile framing', () => {
+    expect(calculateCameraTargetX(LAUNCHER_POSITION.x, 5.5)).toBeCloseTo(1.38, 2);
   });
 
   it('projects the ground into the lower part of the viewport', () => {
@@ -63,6 +70,14 @@ describe('render world helpers', () => {
     expect(worldWidth).toBeGreaterThan(24);
   });
 
+  it('generates enough world chunks to cover far camera positions', () => {
+    const chunks = calculateWorldChunkCenters(174, 25);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.some((center) => center - 60 <= 174 && center + 60 >= 174)).toBe(true);
+    expect(chunks.some((center) => center + 60 >= 230)).toBe(true);
+  });
+
   it('skips line geometry rebuilds while hidden or unchanged', () => {
     const previous = [
       { x: 0, y: 1, z: 0 },
@@ -72,5 +87,43 @@ describe('render world helpers', () => {
     expect(shouldRebuildLineGeometry(previous, [{ x: 9, y: 9, z: 0 }], false)).toBe(false);
     expect(shouldRebuildLineGeometry(previous, previous, true)).toBe(false);
     expect(shouldRebuildLineGeometry(previous, [{ x: 0, y: 1, z: 0 }], true)).toBe(true);
+  });
+
+  it('creates recognizable map item visuals at their simulation positions', () => {
+    const item: MapItem = {
+      id: 'bomb-visual',
+      type: 'ice-bomb',
+      position: { x: 12, y: 0 },
+      radius: 0.9,
+      consumed: false,
+    };
+
+    const visual = createMapItemVisual(item);
+
+    expect(visual.name).toBe('map-item-ice-bomb');
+    expect(visual.position.x).toBe(12);
+    expect(visual.position.y).toBe(0);
+    expect(visual.children.length).toBeGreaterThan(0);
+    expect(visual.visible).toBe(true);
+  });
+
+  it('fades consumed map item visuals without hiding persistent fields', () => {
+    const consumedBomb = createMapItemVisual({
+      id: 'spent-bomb',
+      type: 'ice-bomb',
+      position: { x: 4, y: 0 },
+      radius: 0.9,
+      consumed: true,
+    });
+    const turbine = createMapItemVisual({
+      id: 'turbine',
+      type: 'headwind-turbine',
+      position: { x: 8, y: 0 },
+      radius: 1.4,
+      consumed: false,
+    });
+
+    expect(consumedBomb.visible).toBe(false);
+    expect(turbine.visible).toBe(true);
   });
 });

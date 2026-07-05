@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { GameState, Vec2 } from '../simulation/game';
+import type { GameState, MapItem, Vec2 } from '../simulation/game';
 
 export type RenderWorld = {
   renderer: THREE.WebGLRenderer;
@@ -33,6 +33,8 @@ const START_CAMERA_X = 6;
 const CAMERA_Y = 5.5;
 const CAMERA_Z = 14;
 const CAMERA_LOOK_AT_Y = 5;
+const WORLD_CHUNK_LENGTH = 120;
+const WORLD_CHUNK_MARGIN = 40;
 
 export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -51,10 +53,10 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
   sun.position.set(-5, 10, 8);
   scene.add(sun);
 
-  const ground = createGround();
-  scene.add(ground);
-  scene.add(createDistanceMarkers());
-  scene.add(createIcebergs());
+  const worldChunks = new THREE.Group();
+  scene.add(worldChunks);
+  const mapItems = new THREE.Group();
+  scene.add(mapItems);
 
   const launcher = createLauncher();
   scene.add(launcher);
@@ -73,6 +75,8 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
 
   let trajectoryLinePoints: THREE.Vector3[] = [];
   let launcherBandPoints: THREE.Vector3[] = [];
+  const mapItemVisuals = new Map<string, THREE.Object3D>();
+  const worldChunkVisuals = new Map<number, THREE.Group>();
 
   const world: RenderWorld = {
     renderer,
@@ -83,11 +87,14 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
     trajectoryLine,
     impactParticles,
     update: (state, trajectory, aimStart, aimEnd) => {
+      syncMapItemVisuals(mapItems, mapItemVisuals, state.mapItems);
+
       penguin.position.set(state.position.x, state.position.y + 0.55, 0);
       penguin.rotation.z = -state.position.x * 0.35;
 
-      camera.position.x = calculateCameraTargetX(state.position.x);
+      camera.position.x = calculateCameraTargetX(state.position.x, camera.right - camera.left);
       applyCameraFocus(camera, camera.position.x);
+      syncWorldChunks(worldChunks, worldChunkVisuals, camera.position.x, camera.right - camera.left);
 
       const trajectoryVisible = trajectory.length > 1 && state.phase === 'aiming';
       trajectoryLine.visible = trajectoryVisible;
@@ -140,8 +147,63 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
   return world;
 }
 
-export function calculateCameraTargetX(penguinX: number): number {
-  return Math.max(START_CAMERA_X, penguinX - 6);
+export function createMapItemVisual(item: MapItem): THREE.Group {
+  const group = new THREE.Group();
+  group.name = `map-item-${item.type}`;
+  group.position.set(item.position.x, item.position.y, 0);
+  group.visible = shouldShowMapItem(item);
+
+  switch (item.type) {
+    case 'ice-bomb':
+      group.add(createSphere(0.32, 0x1c2530, 0, 0.38, 0));
+      group.add(createCylinder(0.035, 0.42, 0xffd166, 0.12, 0.76, 0, Math.PI * 0.18));
+      group.add(createSphere(0.08, 0xfff3b0, 0.25, 0.93, 0));
+      break;
+    case 'cannon-cave':
+      group.add(createCylinder(0.48, 0.75, 0x6bb6d8, 0, 0.45, 0, Math.PI / 2));
+      group.add(createSphere(0.34, 0x17384a, 0, 0.45, 0.32));
+      break;
+    case 'geyser-vent':
+      group.add(createCylinder(0.28, 0.18, 0x5f7f90, 0, 0.1, 0, 0));
+      group.add(createCylinder(0.16, 1.25, 0xb8f4ff, 0, 0.72, 0, 0, 0.7));
+      break;
+    case 'headwind-turbine':
+      group.add(createCylinder(0.38, 0.22, 0x8ca3ad, 0, 0.8, -0.15, Math.PI / 2));
+      group.add(createBlade(0, 0.8, 0));
+      group.add(createBlade(0, 0.8, Math.PI / 2));
+      group.add(createBlade(0, 0.8, Math.PI));
+      group.add(createBlade(0, 0.8, Math.PI * 1.5));
+      break;
+    case 'jelly-wall':
+      group.add(createBox(0.28, 1.45, 1.2, 0xa965ff, 0, 0.72, 0, 0.62));
+      break;
+    case 'snow-tornado':
+      group.add(createCylinder(0.25, 1.4, 0xffffff, 0, 0.72, 0, -0.22, 0.55));
+      group.add(createCylinder(0.52, 0.28, 0xd8f7ff, 0, 0.25, 0, 0.35, 0.6));
+      group.add(createCylinder(0.68, 0.22, 0xd8f7ff, 0, 0.78, 0, -0.45, 0.5));
+      break;
+  }
+
+  return group;
+}
+
+export function calculateCameraTargetX(penguinX: number, visibleWorldWidth = CAMERA_WIDTH): number {
+  const startCameraX = visibleWorldWidth < 10 ? penguinX + visibleWorldWidth * 0.25 : START_CAMERA_X;
+  return Math.max(startCameraX, penguinX - 6);
+}
+
+export function calculateWorldChunkCenters(cameraX: number, visibleWorldWidth: number): number[] {
+  const leftEdge = cameraX - visibleWorldWidth / 2 - WORLD_CHUNK_MARGIN;
+  const rightEdge = cameraX + visibleWorldWidth / 2 + WORLD_CHUNK_MARGIN;
+  const firstChunk = Math.floor(leftEdge / WORLD_CHUNK_LENGTH) - 1;
+  const lastChunk = Math.floor(rightEdge / WORLD_CHUNK_LENGTH) + 1;
+  const centers: number[] = [];
+
+  for (let chunkIndex = firstChunk; chunkIndex <= lastChunk; chunkIndex += 1) {
+    centers.push(chunkIndex * WORLD_CHUNK_LENGTH + WORLD_CHUNK_LENGTH / 2);
+  }
+
+  return centers;
 }
 
 export function applyCameraFocus(camera: THREE.Camera, targetX: number): void {
@@ -232,19 +294,30 @@ function createLauncher(): THREE.Group {
   return group;
 }
 
-function createGround(): THREE.Mesh {
-  const geometry = new THREE.BoxGeometry(220, 0.25, 8);
+function createWorldChunk(centerX: number): THREE.Group {
+  const group = new THREE.Group();
+  group.name = `world-chunk-${centerX}`;
+  group.add(createGroundSegment(centerX));
+  group.add(createDistanceMarkers(centerX));
+  group.add(createIcebergs(centerX));
+  return group;
+}
+
+function createGroundSegment(centerX: number): THREE.Mesh {
+  const geometry = new THREE.BoxGeometry(WORLD_CHUNK_LENGTH, 0.25, 8);
   const material = new THREE.MeshStandardMaterial({ color: 0xdaf8ff, roughness: 0.4 });
   const ground = new THREE.Mesh(geometry, material);
-  ground.position.set(65, -0.15, 0);
+  ground.position.set(centerX, -0.15, 0);
   return ground;
 }
 
-function createDistanceMarkers(): THREE.Group {
+function createDistanceMarkers(centerX: number): THREE.Group {
   const group = new THREE.Group();
   const material = new THREE.MeshStandardMaterial({ color: 0x6cb6ce, roughness: 0.5 });
+  const start = Math.max(10, Math.ceil((centerX - WORLD_CHUNK_LENGTH / 2) / 10) * 10);
+  const end = Math.floor((centerX + WORLD_CHUNK_LENGTH / 2) / 10) * 10;
 
-  for (let distance = 10; distance <= 120; distance += 10) {
+  for (let distance = start; distance <= end; distance += 10) {
     const marker = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.35, 0.7), material);
     marker.position.set(distance, 0.08, -1.6);
     group.add(marker);
@@ -253,14 +326,15 @@ function createDistanceMarkers(): THREE.Group {
   return group;
 }
 
-function createIcebergs(): THREE.Group {
+function createIcebergs(centerX: number): THREE.Group {
   const group = new THREE.Group();
   const material = new THREE.MeshStandardMaterial({ color: 0xc7f0ff, roughness: 0.7 });
+  const startX = centerX - WORLD_CHUNK_LENGTH / 2;
 
-  for (let i = 0; i < 14; i += 1) {
+  for (let i = 0; i < 10; i += 1) {
     const cone = new THREE.Mesh(new THREE.ConeGeometry(1.2 + (i % 3) * 0.3, 2.5 + (i % 4) * 0.4, 5), material);
-    cone.position.set(-12 + i * 12, 0.9, -4.2);
-    cone.rotation.y = i * 0.7;
+    cone.position.set(startX + 6 + i * 12, 0.9, -4.2);
+    cone.rotation.y = (centerX + i) * 0.7;
     group.add(cone);
   }
 
@@ -300,11 +374,105 @@ function createImpactParticles(): THREE.Points {
   return particles;
 }
 
+function syncMapItemVisuals(container: THREE.Group, visuals: Map<string, THREE.Object3D>, items: MapItem[]): void {
+  const activeIds = new Set<string>();
+  for (const item of items) {
+    activeIds.add(item.id);
+    let visual = visuals.get(item.id);
+    if (!visual) {
+      visual = createMapItemVisual(item);
+      visuals.set(item.id, visual);
+      container.add(visual);
+    }
+
+    visual.position.set(item.position.x, item.position.y, 0);
+    visual.visible = shouldShowMapItem(item);
+  }
+
+  for (const [id, visual] of visuals) {
+    if (!activeIds.has(id)) {
+      container.remove(visual);
+      visuals.delete(id);
+    }
+  }
+}
+
+function syncWorldChunks(container: THREE.Group, visuals: Map<number, THREE.Group>, cameraX: number, visibleWorldWidth: number): void {
+  const neededCenters = new Set(calculateWorldChunkCenters(cameraX, visibleWorldWidth));
+
+  for (const center of neededCenters) {
+    if (!visuals.has(center)) {
+      const chunk = createWorldChunk(center);
+      visuals.set(center, chunk);
+      container.add(chunk);
+    }
+  }
+
+  for (const [center, chunk] of visuals) {
+    if (!neededCenters.has(center)) {
+      container.remove(chunk);
+      disposeObjectGraph(chunk);
+      visuals.delete(center);
+    }
+  }
+}
+
+function shouldShowMapItem(item: MapItem): boolean {
+  return !item.consumed || item.type === 'headwind-turbine';
+}
+
+function createSphere(radius: number, color: number, x: number, y: number, z: number, opacity = 1): THREE.Mesh {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 18, 12), createMaterial(color, opacity));
+  mesh.position.set(x, y, z);
+  return mesh;
+}
+
+function createCylinder(
+  radius: number,
+  height: number,
+  color: number,
+  x: number,
+  y: number,
+  z: number,
+  rotationZ: number,
+  opacity = 1,
+): THREE.Mesh {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 18), createMaterial(color, opacity));
+  mesh.position.set(x, y, z);
+  mesh.rotation.z = rotationZ;
+  return mesh;
+}
+
+function createBox(width: number, height: number, depth: number, color: number, x: number, y: number, z: number, opacity = 1): THREE.Mesh {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), createMaterial(color, opacity));
+  mesh.position.set(x, y, z);
+  return mesh;
+}
+
+function createBlade(x: number, y: number, rotationZ: number): THREE.Mesh {
+  const blade = createBox(0.16, 0.8, 0.08, 0xe7f8ff, x, y, 0.05, 0.9);
+  blade.rotation.z = rotationZ;
+  return blade;
+}
+
+function createMaterial(color: number, opacity: number): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.45,
+    transparent: opacity < 1,
+    opacity,
+  });
+}
+
 function disposeSceneGraph(scene: THREE.Scene): void {
+  disposeObjectGraph(scene);
+}
+
+function disposeObjectGraph(root: THREE.Object3D): void {
   const geometries = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();
 
-  scene.traverse((object) => {
+  root.traverse((object) => {
     if (hasGeometry(object)) {
       geometries.add(object.geometry);
     }
