@@ -14,7 +14,7 @@ export type PointerAim = {
   options: PointerAimOptions;
   start: (x: number, y: number, pointerId: number) => void;
   move: (x: number, y: number, pointerId: number) => void;
-  end: (pointerId: number) => Vec2;
+  end: (pointerId: number) => Vec2 | null;
   cancel: (pointerId: number) => void;
 };
 
@@ -34,6 +34,10 @@ export function createPointerAim(options: Partial<PointerAimOptions> = {}): Poin
     dragVector: { x: 0, y: 0 },
     options: resolved,
     start: (x, y, pointerId) => {
+      if (aim.isDragging) {
+        return;
+      }
+
       aim.isDragging = true;
       aim.pointerId = pointerId;
       aim.startPoint = { x, y };
@@ -53,7 +57,7 @@ export function createPointerAim(options: Partial<PointerAimOptions> = {}): Poin
     },
     end: (pointerId) => {
       if (!aim.isDragging || aim.pointerId !== pointerId) {
-        return { x: 0, y: 0 };
+        return null;
       }
 
       const launch = getLaunchVector(aim);
