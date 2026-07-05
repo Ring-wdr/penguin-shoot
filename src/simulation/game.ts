@@ -69,7 +69,7 @@ export function stepGame(state: GameState, deltaSeconds: number): void {
   }
 
   let remaining = deltaSeconds;
-  while (remaining > 0) {
+  while (remaining > 0 && state.phase === 'flying') {
     const step = Math.min(remaining, MAX_STEP);
     integrateStep(state, step);
     remaining -= step;

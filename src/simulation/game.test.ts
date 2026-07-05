@@ -50,6 +50,21 @@ describe('penguin launch simulation', () => {
     expectStateToBeClose(oneLargeStep, twoSmallerSteps);
   });
 
+  it('stops consuming a large delta once the penguin settles', () => {
+    const oneLargeStep = createGameState();
+    const frameSteps = createGameState();
+    launchPenguin(oneLargeStep, { x: 10, y: 8 });
+    launchPenguin(frameSteps, { x: 10, y: 8 });
+
+    stepGame(oneLargeStep, 20);
+    for (let i = 0; i < 600; i += 1) {
+      stepGame(frameSteps, 1 / 30);
+    }
+
+    expect(oneLargeStep.phase).toBe('settled');
+    expectStateToBeClose(oneLargeStep, frameSteps);
+  });
+
   it('bounces on the ground and eventually settles', () => {
     const state = createGameState();
     launchPenguin(state, { x: 10, y: 8 });
