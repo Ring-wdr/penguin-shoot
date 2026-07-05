@@ -12,12 +12,12 @@
 
 ## File Structure
 
-- Create `package.json`: project scripts and dependencies.
-- Create `tsconfig.json`: strict TypeScript settings for source and tests.
-- Create `vite.config.ts`: Vite dev server and Vitest environment.
-- Create `index.html`: root HTML shell with game mount point and HUD.
-- Create `.gitignore`: ignore dependencies, build output, local brainstorm files, and test artifacts.
-- Create `src/main.ts`: app bootstrap, fixed animation loop, module wiring, WebGL context-loss message.
+- Generate `package.json`, `tsconfig*.json`, `vite.config.ts`, `index.html`, and initial `src/` files from the current `vanilla-ts` Vite template, then preserve the generated TypeScript and Vite settings.
+- Modify `package.json`: keep template defaults where possible and add game, test, and browser-test dependencies/scripts.
+- Create `vitest.config.ts`: Vitest-only test environment settings so the generated Vite config stays template-owned.
+- Modify `index.html`: replace the template body with the game canvas and HUD shell.
+- Modify `.gitignore`: keep template defaults and add local test/artifact ignores.
+- Modify `src/main.ts`: replace template demo code with app bootstrap, fixed animation loop, module wiring, WebGL context-loss message.
 - Create `src/styles.css`: full-screen canvas, compact HUD, mobile-safe touch behavior.
 - Create `src/simulation/game.ts`: deterministic 2D launch simulation and state transitions.
 - Create `src/simulation/game.test.ts`: unit tests for reset, launch, distance, bounce, and settling.
@@ -33,92 +33,106 @@
 ## Task 1: Project Scaffold
 
 **Files:**
-- Create: `package.json`
-- Create: `tsconfig.json`
-- Create: `vite.config.ts`
-- Create: `index.html`
-- Create: `.gitignore`
+- Generate from Vite template: `package.json`, `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`, `vite.config.ts`, `index.html`, `.gitignore`, `src/main.ts`, `src/style.css`
+- Modify: `package.json`
+- Modify: `index.html`
+- Modify: `.gitignore`
+- Create: `vitest.config.ts`
 
-- [ ] **Step 1: Create package manifest**
+- [ ] **Step 1: Generate the latest Vite vanilla TypeScript template**
 
-Create `package.json` with this content:
+Run from the repository root:
 
-```json
-{
-  "name": "penguin-shoot",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "build": "tsc && vite build",
-    "preview": "vite preview --host 127.0.0.1",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "playwright test"
-  },
-  "dependencies": {
-    "three": "latest"
-  },
-  "devDependencies": {
-    "@playwright/test": "latest",
-    "@types/three": "latest",
-    "typescript": "latest",
-    "vite": "latest",
-    "vitest": "latest"
-  }
+```powershell
+if (Test-Path '.vite-template') {
+  Remove-Item -LiteralPath '.vite-template' -Recurse -Force
+}
+npm create vite@latest .vite-template -- --template vanilla-ts --no-interactive
+```
+
+Expected: `.vite-template/` exists and contains a newly generated `vanilla-ts` Vite project. Do not use `--overwrite` in the repository root because it would remove the existing `docs/` directory.
+
+- [ ] **Step 2: Copy template output into the repository root**
+
+Run:
+
+```powershell
+Copy-Item -LiteralPath '.vite-template\package.json' -Destination 'package.json' -Force
+Copy-Item -LiteralPath '.vite-template\index.html' -Destination 'index.html' -Force
+Copy-Item -LiteralPath '.vite-template\.gitignore' -Destination '.gitignore' -Force
+Copy-Item -LiteralPath '.vite-template\src' -Destination '.' -Recurse -Force
+
+Get-ChildItem -LiteralPath '.vite-template' -Filter 'tsconfig*.json' | ForEach-Object {
+  Copy-Item -LiteralPath $_.FullName -Destination $_.Name -Force
+}
+
+if (Test-Path '.vite-template\vite.config.ts') {
+  Copy-Item -LiteralPath '.vite-template\vite.config.ts' -Destination 'vite.config.ts' -Force
+}
+
+if (Test-Path '.vite-template\public') {
+  Copy-Item -LiteralPath '.vite-template\public' -Destination '.' -Recurse -Force
 }
 ```
 
-- [ ] **Step 2: Create TypeScript config**
+Expected: the repository root now has the template-generated Vite and TypeScript configuration files. Keep those generated settings unchanged unless a later verification command proves a concrete incompatibility.
 
-Create `tsconfig.json` with this content:
+- [ ] **Step 3: Remove the temporary template folder**
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "useDefineForClassFields": true,
-    "module": "ESNext",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vitest/globals"],
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
-  },
-  "include": ["src", "tests", "vite.config.ts", "playwright.config.ts"]
-}
+Run:
+
+```powershell
+Remove-Item -LiteralPath '.vite-template' -Recurse -Force
 ```
 
-- [ ] **Step 3: Create Vite config**
+Expected: `.vite-template/` no longer exists and the checked-in `docs/` directory is still present.
 
-Create `vite.config.ts` with this content:
+- [ ] **Step 4: Install game and test dependencies**
+
+Run:
+
+```bash
+npm install three
+npm install -D vitest jsdom @playwright/test @types/three
+```
+
+Expected: `package-lock.json` is created, `three` is added to `dependencies`, and the test tools are added to `devDependencies`.
+
+- [ ] **Step 5: Update package scripts without replacing template dependency versions**
+
+Run:
+
+```bash
+npm pkg set "name=penguin-shoot" "private=true"
+npm pkg set "scripts.dev=vite --host 127.0.0.1"
+npm pkg set "scripts.build=tsc && vite build"
+npm pkg set "scripts.preview=vite preview --host 127.0.0.1"
+npm pkg set "scripts.test=vitest run --config vitest.config.ts"
+npm pkg set "scripts.test:watch=vitest --config vitest.config.ts"
+npm pkg set "scripts.test:e2e=playwright test"
+```
+
+Expected: `package.json` keeps the template's generated Vite and TypeScript dependency versions while adding the scripts required by this plan.
+
+- [ ] **Step 6: Create Vitest config**
+
+Create `vitest.config.ts` with this content:
 
 ```ts
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  server: {
-    host: '127.0.0.1',
-    port: 5173,
-  },
   test: {
     environment: 'jsdom',
-    globals: true,
   },
 });
 ```
 
-- [ ] **Step 4: Create HTML shell**
+Expected: unit tests can use jsdom without modifying the template-generated `vite.config.ts`.
 
-Create `index.html` with this content:
+- [ ] **Step 7: Replace the template HTML body with the game shell**
+
+Replace `index.html` with this content:
 
 ```html
 <!doctype html>
@@ -146,32 +160,22 @@ Create `index.html` with this content:
 </html>
 ```
 
-- [ ] **Step 5: Create gitignore**
-
-Create `.gitignore` with this content:
-
-```gitignore
-node_modules/
-dist/
-coverage/
-playwright-report/
-test-results/
-.superpowers/
-.DS_Store
-*.log
-```
-
-- [ ] **Step 6: Install dependencies**
+- [ ] **Step 8: Extend gitignore while preserving template defaults**
 
 Run:
 
-```bash
-npm install
+```powershell
+$entries = @('coverage/', 'playwright-report/', 'test-results/', '.superpowers/', '*.log')
+foreach ($entry in $entries) {
+  if (-not (Select-String -Path '.gitignore' -Pattern ([regex]::Escape($entry)) -Quiet)) {
+    Add-Content -Path '.gitignore' -Value $entry
+  }
+}
 ```
 
-Expected: `package-lock.json` is created and npm exits with code `0`.
+Expected: `.gitignore` still contains the latest template ignores and also contains `coverage/`, `playwright-report/`, `test-results/`, `.superpowers/`, and `*.log`.
 
-- [ ] **Step 7: Run initial build to expose missing entry files**
+- [ ] **Step 9: Run initial build with template source**
 
 Run:
 
@@ -179,18 +183,18 @@ Run:
 npm run build
 ```
 
-Expected: FAIL because `src/main.ts` does not exist yet. This confirms the scaffold is wired to the intended entry point.
+Expected: PASS. The template-generated `src/main.ts` still exists at this point, so the project should build before game code replaces it.
 
-- [ ] **Step 8: Commit scaffold**
+- [ ] **Step 10: Commit scaffold**
 
 Run:
 
 ```bash
-git add .gitignore index.html package.json package-lock.json tsconfig.json vite.config.ts
+git add .gitignore index.html package.json package-lock.json tsconfig*.json vite.config.ts vitest.config.ts src
 git commit -m "chore: scaffold vite three project"
 ```
 
-Expected: a commit containing the project scaffold.
+Expected: a commit containing the Vite-template scaffold plus dependency, script, HTML, gitignore, and Vitest additions.
 
 ## Task 2: Simulation Core
 
@@ -1185,12 +1189,31 @@ Expected: a commit containing Three.js world rendering and tests.
 ## Task 6: App Integration And Styling
 
 **Files:**
-- Create: `src/main.ts`
+- Modify: `src/main.ts`
 - Create: `src/styles.css`
+- Delete if present: `src/style.css`
+- Delete if present: `src/counter.ts`
+- Delete if present: `src/typescript.svg`
+- Delete if present: `public/vite.svg`
 
-- [ ] **Step 1: Create main app wiring**
+- [ ] **Step 1: Remove template demo files**
 
-Create `src/main.ts` with this content:
+Run:
+
+```powershell
+$demoFiles = @('src/style.css', 'src/counter.ts', 'src/typescript.svg', 'public/vite.svg')
+foreach ($file in $demoFiles) {
+  if (Test-Path $file) {
+    Remove-Item -LiteralPath $file -Force
+  }
+}
+```
+
+Expected: template demo-only files are removed if the current Vite template generated them. No error occurs if a future template omits one of these files.
+
+- [ ] **Step 2: Replace main app wiring**
+
+Replace `src/main.ts` with this content:
 
 ```ts
 import './styles.css';
@@ -1309,7 +1332,7 @@ window.addEventListener('beforeunload', () => {
 });
 ```
 
-- [ ] **Step 2: Create styles**
+- [ ] **Step 3: Create styles**
 
 Create `src/styles.css` with this content:
 
@@ -1450,7 +1473,7 @@ body {
 }
 ```
 
-- [ ] **Step 3: Run unit tests**
+- [ ] **Step 4: Run unit tests**
 
 Run:
 
@@ -1460,7 +1483,7 @@ npm test
 
 Expected: PASS for simulation, input, HUD, and render helper tests.
 
-- [ ] **Step 4: Run production build**
+- [ ] **Step 5: Run production build**
 
 Run:
 
@@ -1470,16 +1493,16 @@ npm run build
 
 Expected: PASS and `dist/` is generated.
 
-- [ ] **Step 5: Commit integrated prototype**
+- [ ] **Step 6: Commit integrated prototype**
 
 Run:
 
 ```bash
-git add src/main.ts src/styles.css
+git add -A src public
 git commit -m "feat: wire playable penguin prototype"
 ```
 
-Expected: a commit containing app integration and styling.
+Expected: a commit containing app integration, styling, and removal of any remaining template demo files.
 
 ## Task 7: Browser Smoke Tests
 
