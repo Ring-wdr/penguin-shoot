@@ -22,6 +22,19 @@ export type BestDistanceStore = {
   save: (distance: number) => void;
 };
 
+function getDefaultStorage(): Storage | undefined {
+  try {
+    return typeof window === 'undefined' ? undefined : window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseStoredDistance(rawValue: string): number {
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
 export function createHud(elements: HudElements): Hud {
   return {
     update: (state) => {
@@ -35,28 +48,31 @@ export function createHud(elements: HudElements): Hud {
   };
 }
 
-export function createBestDistanceStore(key: string, storage: Storage = window.localStorage): BestDistanceStore {
+export function createBestDistanceStore(key: string, storage?: Storage): BestDistanceStore {
   let memoryValue = 0;
 
   return {
     load: () => {
       try {
-        const rawValue = storage.getItem(key);
+        const rawValue = (storage ?? getDefaultStorage())?.getItem(key);
         if (rawValue === null) {
           return memoryValue;
         }
 
-        const parsed = Number.parseFloat(rawValue);
-        memoryValue = Number.isFinite(parsed) ? parsed : 0;
+        memoryValue = rawValue === undefined ? memoryValue : parseStoredDistance(rawValue);
         return memoryValue;
       } catch {
         return memoryValue;
       }
     },
     save: (distance) => {
-      memoryValue = Math.max(memoryValue, distance);
+      if (!Number.isFinite(distance) || distance <= memoryValue) {
+        return;
+      }
+
+      memoryValue = distance;
       try {
-        storage.setItem(key, String(memoryValue));
+        (storage ?? getDefaultStorage())?.setItem(key, String(memoryValue));
       } catch {
         return;
       }

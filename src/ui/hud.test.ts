@@ -1,9 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createBestDistanceStore, createHud } from './hud';
 
 describe('best distance store', () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('loads zero when storage is empty', () => {
@@ -35,6 +39,43 @@ describe('best distance store', () => {
 
     expect(store.load()).toBe(9);
   });
+
+  it('falls back to memory when localStorage access throws', () => {
+    vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+
+    const store = createBestDistanceStore('test-best');
+
+    store.save(7);
+
+    expect(store.load()).toBe(7);
+  });
+
+  it('loads zero for corrupted storage values', () => {
+    localStorage.setItem('test-best-alpha', '12abc');
+    localStorage.setItem('test-best-negative', '-4');
+
+    expect(createBestDistanceStore('test-best-alpha').load()).toBe(0);
+    expect(createBestDistanceStore('test-best-negative').load()).toBe(0);
+  });
+
+  it('only writes when distance improves the current best', () => {
+    const storage = {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    } as unknown as Storage;
+    const store = createBestDistanceStore('test-best', storage);
+
+    store.save(10);
+    store.save(9);
+    store.save(10);
+    store.save(11);
+
+    expect(storage.setItem).toHaveBeenCalledTimes(2);
+    expect(storage.setItem).toHaveBeenNthCalledWith(1, 'test-best', '10');
+    expect(storage.setItem).toHaveBeenNthCalledWith(2, 'test-best', '11');
+  });
 });
 
 describe('hud', () => {
@@ -56,5 +97,48 @@ describe('hud', () => {
     expect(document.querySelector('#distance')?.textContent).toBe('12 m');
     expect(document.querySelector('#best-distance')?.textContent).toBe('Best 45 m');
     expect((document.querySelector('#reset-button') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('disables reset only while aiming at zero distance', () => {
+    document.body.innerHTML = `
+      <span id="distance"></span>
+      <span id="best-distance"></span>
+      <button id="reset-button"></button>
+    `;
+    const resetButton = document.querySelector('#reset-button') as HTMLButtonElement;
+    const hud = createHud({
+      distanceElement: document.querySelector('#distance') as HTMLElement,
+      bestDistanceElement: document.querySelector('#best-distance') as HTMLElement,
+      resetButton,
+    });
+
+    hud.update({ distance: 0, bestDistance: 0, phase: 'aiming' });
+    expect(resetButton.disabled).toBe(true);
+
+    hud.update({ distance: 1, bestDistance: 0, phase: 'aiming' });
+    expect(resetButton.disabled).toBe(false);
+
+    hud.update({ distance: 0, bestDistance: 0, phase: 'flying' });
+    expect(resetButton.disabled).toBe(false);
+  });
+
+  it('calls reset handler when reset button is clicked', () => {
+    document.body.innerHTML = `
+      <span id="distance"></span>
+      <span id="best-distance"></span>
+      <button id="reset-button"></button>
+    `;
+    const resetButton = document.querySelector('#reset-button') as HTMLButtonElement;
+    const handler = vi.fn();
+    const hud = createHud({
+      distanceElement: document.querySelector('#distance') as HTMLElement,
+      bestDistanceElement: document.querySelector('#best-distance') as HTMLElement,
+      resetButton,
+    });
+
+    hud.onReset(handler);
+    resetButton.click();
+
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 });
