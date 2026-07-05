@@ -30,6 +30,8 @@ const world = createRenderWorld(canvas);
 
 let lastFrameTime = performance.now();
 let animationFrame = 0;
+let isRunning = true;
+let isWorldDisposed = false;
 
 hud.onReset(() => {
   resetGame(state);
@@ -37,7 +39,7 @@ hud.onReset(() => {
 });
 
 canvas.addEventListener('pointerdown', (event) => {
-  if (state.phase !== 'aiming') {
+  if (!isRunning || state.phase !== 'aiming') {
     return;
   }
 
@@ -47,7 +49,7 @@ canvas.addEventListener('pointerdown', (event) => {
 });
 
 canvas.addEventListener('pointermove', (event) => {
-  if (!aim.isDragging) {
+  if (!isRunning || !aim.isDragging) {
     return;
   }
 
@@ -56,7 +58,7 @@ canvas.addEventListener('pointermove', (event) => {
 });
 
 canvas.addEventListener('pointerup', (event) => {
-  if (!aim.isDragging) {
+  if (!isRunning || !aim.isDragging) {
     return;
   }
 
@@ -71,17 +73,34 @@ canvas.addEventListener('pointercancel', (event) => {
   aim.cancel(event.pointerId);
 });
 
+canvas.addEventListener('lostpointercapture', (event) => {
+  aim.cancel(event.pointerId);
+});
+
 canvas.addEventListener('webglcontextlost', (event) => {
   event.preventDefault();
   message.hidden = false;
   message.textContent = 'WebGL context lost. Reload the page to restart the prototype.';
+  shutdown();
 });
 
 window.addEventListener('resize', () => {
+  if (!isRunning) {
+    return;
+  }
+
   world.resize();
 });
 
+window.addEventListener('blur', () => {
+  cancelActiveAim();
+});
+
 function frame(now: number): void {
+  if (!isRunning) {
+    return;
+  }
+
   const deltaSeconds = Math.min((now - lastFrameTime) / 1000, 0.05);
   lastFrameTime = now;
 
@@ -97,7 +116,9 @@ function frame(now: number): void {
 
   world.update(state, trajectory, aimStart, aimEnd);
   hud.update(state);
-  animationFrame = requestAnimationFrame(frame);
+  if (isRunning) {
+    animationFrame = requestAnimationFrame(frame);
+  }
 }
 
 function screenDragToWorldEnd(dragVector: Vec2): Vec2 {
@@ -111,6 +132,24 @@ animationFrame = requestAnimationFrame(frame);
 hud.update(state);
 
 window.addEventListener('beforeunload', () => {
-  cancelAnimationFrame(animationFrame);
-  world.dispose();
+  shutdown();
 });
+
+function cancelActiveAim(): void {
+  if (aim.pointerId !== null) {
+    aim.cancel(aim.pointerId);
+  }
+}
+
+function shutdown(): void {
+  if (!isRunning && isWorldDisposed) {
+    return;
+  }
+
+  isRunning = false;
+  cancelAnimationFrame(animationFrame);
+  if (!isWorldDisposed) {
+    isWorldDisposed = true;
+    world.dispose();
+  }
+}
