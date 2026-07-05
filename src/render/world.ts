@@ -28,7 +28,11 @@ export type LinePoint = {
 };
 
 const CAMERA_WIDTH = 18;
-const CAMERA_HEIGHT = 10;
+const CAMERA_HEIGHT = 14;
+const START_CAMERA_X = 6;
+const CAMERA_Y = 5.5;
+const CAMERA_Z = 14;
+const CAMERA_LOOK_AT_Y = 5;
 
 export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -39,8 +43,8 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
   scene.fog = new THREE.Fog(0x9ad7e8, 35, 120);
 
   const camera = new THREE.OrthographicCamera(-CAMERA_WIDTH / 2, CAMERA_WIDTH / 2, CAMERA_HEIGHT / 2, -CAMERA_HEIGHT / 2, 0.1, 200);
-  camera.position.set(0, 5.5, 14);
-  camera.lookAt(0, 2, 0);
+  camera.position.set(calculateCameraTargetX(0), CAMERA_Y, CAMERA_Z);
+  applyCameraFocus(camera, camera.position.x);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x8fb4c8, 2.4));
   const sun = new THREE.DirectionalLight(0xffffff, 2);
@@ -83,7 +87,7 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
       penguin.rotation.z = -state.position.x * 0.35;
 
       camera.position.x = calculateCameraTargetX(state.position.x);
-      camera.lookAt(camera.position.x, 2, 0);
+      applyCameraFocus(camera, camera.position.x);
 
       const trajectoryVisible = trajectory.length > 1 && state.phase === 'aiming';
       trajectoryLine.visible = trajectoryVisible;
@@ -137,7 +141,11 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
 }
 
 export function calculateCameraTargetX(penguinX: number): number {
-  return Math.max(0, penguinX - 6);
+  return Math.max(START_CAMERA_X, penguinX - 6);
+}
+
+export function applyCameraFocus(camera: THREE.Camera, targetX: number): void {
+  camera.lookAt(targetX, CAMERA_LOOK_AT_Y, 0);
 }
 
 export function createTrajectoryPoints(points: Vec2[]): THREE.Vector3[] {

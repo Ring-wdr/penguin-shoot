@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import { LAUNCHER_POSITION } from '../simulation/game';
 import {
+  applyCameraFocus,
   calculateCameraBounds,
   calculateCameraTargetX,
   createTrajectoryPoints,
@@ -8,13 +10,26 @@ import {
 } from './world';
 
 describe('render world helpers', () => {
-  it('keeps camera near launcher before the penguin moves forward', () => {
-    expect(calculateCameraTargetX(-1)).toBe(0);
-    expect(calculateCameraTargetX(0)).toBe(0);
+  it('frames the launcher on the left side before the penguin moves forward', () => {
+    expect(calculateCameraTargetX(-1)).toBe(6);
+    expect(calculateCameraTargetX(LAUNCHER_POSITION.x)).toBe(6);
   });
 
   it('follows forward progress with a readable lead', () => {
     expect(calculateCameraTargetX(20)).toBe(14);
+  });
+
+  it('projects the ground into the lower part of the viewport', () => {
+    const bounds = calculateCameraBounds(1280, 720);
+    const camera = new THREE.OrthographicCamera(bounds.left, bounds.right, bounds.top, bounds.bottom, 0.1, 200);
+    camera.position.set(calculateCameraTargetX(LAUNCHER_POSITION.x), 5.5, 14);
+    applyCameraFocus(camera, camera.position.x);
+    camera.updateMatrixWorld();
+    camera.updateProjectionMatrix();
+
+    const groundScreenY = (1 - new THREE.Vector3(LAUNCHER_POSITION.x, 0, 0).project(camera).y) / 2;
+
+    expect(groundScreenY).toBeGreaterThan(0.8);
   });
 
   it('converts simulation trajectory into three-friendly points', () => {
@@ -37,6 +52,15 @@ describe('render world helpers', () => {
     const worldHeight = bounds.top - bounds.bottom;
 
     expect(worldWidth / worldHeight).toBeCloseTo(0.4, 5);
+  });
+
+  it('uses a pulled-back view to show more of the playfield at once', () => {
+    const bounds = calculateCameraBounds(1280, 720);
+    const worldWidth = bounds.right - bounds.left;
+    const worldHeight = bounds.top - bounds.bottom;
+
+    expect(worldHeight).toBe(14);
+    expect(worldWidth).toBeGreaterThan(24);
   });
 
   it('skips line geometry rebuilds while hidden or unchanged', () => {
