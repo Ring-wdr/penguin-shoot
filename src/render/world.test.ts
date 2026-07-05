@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { LAUNCHER_POSITION } from '../simulation/game';
-import { calculateCameraTargetX, createTrajectoryPoints } from './world';
+import {
+  calculateCameraBounds,
+  calculateCameraTargetX,
+  createTrajectoryPoints,
+  shouldRebuildLineGeometry,
+} from './world';
 
 describe('render world helpers', () => {
   it('keeps camera near launcher before the penguin moves forward', () => {
@@ -24,5 +29,24 @@ describe('render world helpers', () => {
     expect(points[1].x).toBe(2);
     expect(points[1].y).toBe(3);
     expect(points[1].z).toBe(0);
+  });
+
+  it('preserves narrow canvas aspect in camera bounds', () => {
+    const bounds = calculateCameraBounds(320, 800);
+    const worldWidth = bounds.right - bounds.left;
+    const worldHeight = bounds.top - bounds.bottom;
+
+    expect(worldWidth / worldHeight).toBeCloseTo(0.4, 5);
+  });
+
+  it('skips line geometry rebuilds while hidden or unchanged', () => {
+    const previous = [
+      { x: 0, y: 1, z: 0 },
+      { x: 1, y: 2, z: 0 },
+    ];
+
+    expect(shouldRebuildLineGeometry(previous, [{ x: 9, y: 9, z: 0 }], false)).toBe(false);
+    expect(shouldRebuildLineGeometry(previous, previous, true)).toBe(false);
+    expect(shouldRebuildLineGeometry(previous, [{ x: 0, y: 1, z: 0 }], true)).toBe(true);
   });
 });

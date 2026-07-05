@@ -14,6 +14,19 @@ export type RenderWorld = {
   dispose: () => void;
 };
 
+export type CameraBounds = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+export type LinePoint = {
+  x: number;
+  y: number;
+  z: number;
+};
+
 const CAMERA_WIDTH = 18;
 const CAMERA_HEIGHT = 10;
 
@@ -54,6 +67,9 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
   const impactParticles = createImpactParticles();
   scene.add(impactParticles);
 
+  let trajectoryLinePoints: THREE.Vector3[] = [];
+  let launcherBandPoints: THREE.Vector3[] = [];
+
   const world: RenderWorld = {
     renderer,
     scene,
@@ -69,14 +85,25 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
       camera.position.x = calculateCameraTargetX(state.position.x);
       camera.lookAt(camera.position.x, 2, 0);
 
-      updateLine(trajectoryLine, createTrajectoryPoints(trajectory));
-      trajectoryLine.visible = trajectory.length > 1 && state.phase === 'aiming';
+      const trajectoryVisible = trajectory.length > 1 && state.phase === 'aiming';
+      trajectoryLine.visible = trajectoryVisible;
+      if (trajectoryVisible) {
+        const nextTrajectoryPoints = createTrajectoryPoints(trajectory);
+        if (shouldRebuildLineGeometry(trajectoryLinePoints, nextTrajectoryPoints, trajectoryVisible)) {
+          updateLine(trajectoryLine, nextTrajectoryPoints);
+          trajectoryLinePoints = nextTrajectoryPoints;
+        }
+      }
 
       if (aimStart && aimEnd && state.phase === 'aiming') {
-        updateLine(launcherBand, [
+        const nextLauncherBandPoints = [
           new THREE.Vector3(aimStart.x, aimStart.y, 0.05),
           new THREE.Vector3(aimEnd.x, aimEnd.y, 0.05),
-        ]);
+        ];
+        if (shouldRebuildLineGeometry(launcherBandPoints, nextLauncherBandPoints, true)) {
+          updateLine(launcherBand, nextLauncherBandPoints);
+          launcherBandPoints = nextLauncherBandPoints;
+        }
         launcherBand.visible = true;
       } else {
         launcherBand.visible = false;
@@ -92,11 +119,11 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
       const height = Math.max(canvas.clientHeight, 1);
       renderer.setSize(width, height, false);
 
-      const aspect = Math.max(width / height, 0.6);
-      camera.left = (-CAMERA_HEIGHT * aspect) / 2;
-      camera.right = (CAMERA_HEIGHT * aspect) / 2;
-      camera.top = CAMERA_HEIGHT / 2;
-      camera.bottom = -CAMERA_HEIGHT / 2;
+      const bounds = calculateCameraBounds(width, height);
+      camera.left = bounds.left;
+      camera.right = bounds.right;
+      camera.top = bounds.top;
+      camera.bottom = bounds.bottom;
       camera.updateProjectionMatrix();
     },
     dispose: () => {
@@ -115,6 +142,32 @@ export function calculateCameraTargetX(penguinX: number): number {
 
 export function createTrajectoryPoints(points: Vec2[]): THREE.Vector3[] {
   return points.map((point) => new THREE.Vector3(point.x, point.y, 0));
+}
+
+export function calculateCameraBounds(width: number, height: number): CameraBounds {
+  const safeWidth = Math.max(width, 1);
+  const safeHeight = Math.max(height, 1);
+  const aspect = safeWidth / safeHeight;
+  const worldWidth = CAMERA_HEIGHT * aspect;
+
+  return {
+    left: -worldWidth / 2,
+    right: worldWidth / 2,
+    top: CAMERA_HEIGHT / 2,
+    bottom: -CAMERA_HEIGHT / 2,
+  };
+}
+
+export function shouldRebuildLineGeometry(previous: readonly LinePoint[], next: readonly LinePoint[], visible: boolean): boolean {
+  if (!visible) {
+    return false;
+  }
+
+  if (previous.length !== next.length) {
+    return true;
+  }
+
+  return next.some((point, index) => !linePointsEqual(previous[index], point));
 }
 
 function createPenguin(): THREE.Group {
@@ -217,6 +270,10 @@ function createLine(color: number, linewidth: number): THREE.Line {
 function updateLine(line: THREE.Line, points: THREE.Vector3[]): void {
   line.geometry.dispose();
   line.geometry = new THREE.BufferGeometry().setFromPoints(points.length > 0 ? points : [new THREE.Vector3(), new THREE.Vector3()]);
+}
+
+function linePointsEqual(left: LinePoint, right: LinePoint): boolean {
+  return left.x === right.x && left.y === right.y && left.z === right.z;
 }
 
 function createImpactParticles(): THREE.Points {
