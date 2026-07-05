@@ -7,6 +7,7 @@ import {
   resetGame,
   stepGame,
 } from './game';
+import type { GameState } from './game';
 
 describe('penguin launch simulation', () => {
   it('starts in aiming state at the launcher', () => {
@@ -36,6 +37,19 @@ describe('penguin launch simulation', () => {
     expect(state.distance).toBeGreaterThan(0);
   });
 
+  it('consumes larger deltas through deterministic substeps', () => {
+    const oneLargeStep = createGameState();
+    const twoSmallerSteps = createGameState();
+    launchPenguin(oneLargeStep, { x: 12, y: 8 });
+    launchPenguin(twoSmallerSteps, { x: 12, y: 8 });
+
+    stepGame(oneLargeStep, 0.2);
+    stepGame(twoSmallerSteps, 0.1);
+    stepGame(twoSmallerSteps, 0.1);
+
+    expectStateToBeClose(oneLargeStep, twoSmallerSteps);
+  });
+
   it('bounces on the ground and eventually settles', () => {
     const state = createGameState();
     launchPenguin(state, { x: 10, y: 8 });
@@ -46,7 +60,9 @@ describe('penguin launch simulation', () => {
 
     expect(state.phase).toBe('settled');
     expect(state.position.y).toBe(0);
+    expect(state.velocity).toEqual({ x: 0, y: 0 });
     expect(state.distance).toBeGreaterThan(5);
+    expect(state.bestDistance).toBe(state.distance);
   });
 
   it('resets to launcher while preserving best distance', () => {
@@ -65,11 +81,28 @@ describe('penguin launch simulation', () => {
 
   it('predicts a readable trajectory without mutating state', () => {
     const state = createGameState();
+    const snapshot = {
+      ...state,
+      position: { ...state.position },
+      velocity: { ...state.velocity },
+    };
     const points = predictTrajectory(state, { x: 12, y: 8 }, 8);
 
     expect(points).toHaveLength(8);
     expect(points[0].x).toBeGreaterThanOrEqual(LAUNCHER_POSITION.x);
     expect(points.some((point) => point.y > LAUNCHER_POSITION.y)).toBe(true);
-    expect(state.phase).toBe('aiming');
+    expect(state).toEqual(snapshot);
   });
 });
+
+function expectStateToBeClose(actual: GameState, expected: GameState): void {
+  expect(actual.phase).toBe(expected.phase);
+  expect(actual.position.x).toBeCloseTo(expected.position.x, 5);
+  expect(actual.position.y).toBeCloseTo(expected.position.y, 5);
+  expect(actual.velocity.x).toBeCloseTo(expected.velocity.x, 5);
+  expect(actual.velocity.y).toBeCloseTo(expected.velocity.y, 5);
+  expect(actual.distance).toBeCloseTo(expected.distance, 5);
+  expect(actual.bestDistance).toBeCloseTo(expected.bestDistance, 5);
+  expect(actual.flightTime).toBeCloseTo(expected.flightTime, 5);
+  expect(actual.lastImpactTime).toBeCloseTo(expected.lastImpactTime, 5);
+}

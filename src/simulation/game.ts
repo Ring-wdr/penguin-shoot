@@ -19,7 +19,8 @@ export const LAUNCHER_POSITION: Vec2 = { x: 0, y: 1.1 };
 
 const GRAVITY = -18;
 const GROUND_Y = 0;
-const MAX_LAUNCH_SPEED = Math.hypot(24, 14.4);
+const MAX_LAUNCH_VELOCITY: Vec2 = { x: 24, y: 14.4 };
+const MAX_LAUNCH_SPEED = Math.hypot(MAX_LAUNCH_VELOCITY.x, MAX_LAUNCH_VELOCITY.y);
 const AIM_TO_SPEED = 1.2;
 const BOUNCE_DAMPING = 0.42;
 const ROLLING_FRICTION = 4.8;
@@ -63,11 +64,11 @@ export function launchPenguin(state: GameState, aimVelocity: Vec2): void {
 }
 
 export function stepGame(state: GameState, deltaSeconds: number): void {
-  if (state.phase !== 'flying') {
+  if (state.phase !== 'flying' || deltaSeconds <= 0 || !Number.isFinite(deltaSeconds)) {
     return;
   }
 
-  let remaining = Math.min(deltaSeconds, 0.1);
+  let remaining = deltaSeconds;
   while (remaining > 0) {
     const step = Math.min(remaining, MAX_STEP);
     integrateStep(state, step);
