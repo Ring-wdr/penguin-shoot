@@ -10,6 +10,8 @@ export type RenderWorld = {
   trajectoryLine: THREE.Line;
   impactParticles: THREE.Points;
   update: (state: GameState, trajectory: Vec2[], aimStart: Vec2 | null, aimEnd: Vec2 | null) => void;
+  transitionCameraToPenguin: (state: GameState, durationMs?: number) => void;
+  isCameraTransitioning: () => boolean;
   resize: () => void;
   dispose: () => void;
 };
@@ -33,8 +35,17 @@ const START_CAMERA_X = 6;
 const CAMERA_Y = 5.5;
 const CAMERA_Z = 14;
 const CAMERA_LOOK_AT_Y = 5;
+const ATTEMPT_CAMERA_TRANSITION_MS = 520;
 const WORLD_CHUNK_LENGTH = 120;
 const WORLD_CHUNK_MARGIN = 40;
+
+type CameraTransition = {
+  fromX: number;
+  toX: number;
+  startedAt: number;
+  durationMs: number;
+  reducedMotion: boolean;
+};
 
 export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -77,6 +88,7 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
   let launcherBandPoints: THREE.Vector3[] = [];
   const mapItemVisuals = new Map<string, THREE.Object3D>();
   const worldChunkVisuals = new Map<number, THREE.Group>();
+  let cameraTransition: CameraTransition | null = null;
 
   const world: RenderWorld = {
     renderer,
@@ -92,7 +104,22 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
       penguin.position.set(state.position.x, state.position.y + 0.55, 0);
       penguin.rotation.z = -state.position.x * 0.35;
 
-      camera.position.x = calculateCameraTargetX(state.position.x, camera.right - camera.left);
+      const targetCameraX = calculateCameraTargetX(state.position.x, camera.right - camera.left);
+      if (cameraTransition) {
+        const elapsedMs = performance.now() - cameraTransition.startedAt;
+        camera.position.x = calculateTransitionedCameraX(
+          cameraTransition.fromX,
+          cameraTransition.toX,
+          elapsedMs,
+          cameraTransition.durationMs,
+          cameraTransition.reducedMotion,
+        );
+        if (camera.position.x === cameraTransition.toX) {
+          cameraTransition = null;
+        }
+      } else {
+        camera.position.x = targetCameraX;
+      }
       applyCameraFocus(camera, camera.position.x);
       syncWorldChunks(worldChunks, worldChunkVisuals, camera.position.x, camera.right - camera.left);
 
@@ -125,6 +152,16 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
 
       renderer.render(scene, camera);
     },
+    transitionCameraToPenguin: (state, durationMs = ATTEMPT_CAMERA_TRANSITION_MS) => {
+      cameraTransition = {
+        fromX: camera.position.x,
+        toX: calculateCameraTargetX(state.position.x, camera.right - camera.left),
+        startedAt: performance.now(),
+        durationMs,
+        reducedMotion: prefersReducedMotion(),
+      };
+    },
+    isCameraTransitioning: () => cameraTransition !== null,
     resize: () => {
       const width = Math.max(canvas.clientWidth, 1);
       const height = Math.max(canvas.clientHeight, 1);
@@ -190,6 +227,22 @@ export function createMapItemVisual(item: MapItem): THREE.Group {
 export function calculateCameraTargetX(penguinX: number, visibleWorldWidth = CAMERA_WIDTH): number {
   const startCameraX = visibleWorldWidth < 10 ? penguinX + visibleWorldWidth * 0.25 : START_CAMERA_X;
   return Math.max(startCameraX, penguinX - 6);
+}
+
+export function calculateTransitionedCameraX(
+  fromX: number,
+  toX: number,
+  elapsedMs: number,
+  durationMs: number,
+  reducedMotion: boolean,
+): number {
+  if (reducedMotion || durationMs <= 0 || elapsedMs >= durationMs) {
+    return toX;
+  }
+
+  const progress = Math.max(0, Math.min(1, elapsedMs / durationMs));
+  const eased = 1 - (1 - progress) ** 5;
+  return fromX + (toX - fromX) * eased;
 }
 
 export function calculateWorldChunkCenters(cameraX: number, visibleWorldWidth: number): number[] {
@@ -419,6 +472,10 @@ function syncWorldChunks(container: THREE.Group, visuals: Map<number, THREE.Grou
 
 function shouldShowMapItem(item: MapItem): boolean {
   return !item.consumed || item.type === 'headwind-turbine';
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 }
 
 function createSphere(radius: number, color: number, x: number, y: number, z: number, opacity = 1): THREE.Mesh {

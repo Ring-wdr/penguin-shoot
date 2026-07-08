@@ -5,6 +5,7 @@ import {
   applyCameraFocus,
   calculateCameraBounds,
   calculateCameraTargetX,
+  calculateTransitionedCameraX,
   calculateWorldChunkCenters,
   createMapItemVisual,
   createTrajectoryPoints,
@@ -20,6 +21,16 @@ describe('render world helpers', () => {
 
   it('follows forward progress with a readable lead', () => {
     expect(calculateCameraTargetX(20)).toBe(14);
+  });
+
+  it('eases camera transition toward the next attempt framing', () => {
+    expect(calculateTransitionedCameraX(10, 30, 0, 520, false)).toBe(10);
+    expect(calculateTransitionedCameraX(10, 30, 260, 520, false)).toBeGreaterThan(29);
+    expect(calculateTransitionedCameraX(10, 30, 520, 520, false)).toBe(30);
+  });
+
+  it('snaps camera transition when reduced motion is requested', () => {
+    expect(calculateTransitionedCameraX(10, 30, 0, 520, true)).toBe(30);
   });
 
   it('keeps the launcher visible in narrow mobile framing', () => {

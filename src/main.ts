@@ -200,7 +200,7 @@ function cancelActiveAim(): void {
 }
 
 function canPlay(): boolean {
-  return isRunning && session?.status === 'playing';
+  return isRunning && session?.status === 'playing' && !world.isCameraTransitioning();
 }
 
 function handleSettledAttempt(): void {
@@ -220,6 +220,7 @@ function handleSettledAttempt(): void {
   const nextAttempt = getCurrentAttempt(session);
   if (nextAttempt) {
     resetGame(state, nextAttempt.startDistance);
+    world.transitionCameraToPenguin(state);
     recordedSettledAttempt = false;
   }
 }

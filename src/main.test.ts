@@ -8,8 +8,11 @@ type BootContext = {
   cancelAnimationFrame: ReturnType<typeof vi.fn>;
   dispose: ReturnType<typeof vi.fn>;
   frameCallbacks: Map<number, FrameCallback>;
+  isCameraTransitioning: ReturnType<typeof vi.fn>;
   launchPenguin: ReturnType<typeof vi.fn>;
+  resetGame: ReturnType<typeof vi.fn>;
   state: GameState;
+  transitionCameraToPenguin: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
 };
 
@@ -83,6 +86,33 @@ describe('main app integration', () => {
 
     expect(app.launchPenguin).toHaveBeenCalledTimes(1);
   });
+
+  it('blocks launching while the camera moves to the next relay attempt', async () => {
+    const app = await bootApp();
+    document.querySelector<HTMLInputElement>('#attempt-count')!.value = '2';
+    document.querySelector<HTMLButtonElement>('#start-session-button')?.click();
+
+    app.state.phase = 'settled';
+    app.state.distance = 100;
+    app.frameCallbacks.get(1)?.(16);
+
+    expect(app.transitionCameraToPenguin).toHaveBeenCalledTimes(1);
+    expect(app.resetGame).toHaveBeenLastCalledWith(app.state, 100);
+
+    app.isCameraTransitioning.mockReturnValue(true);
+    dispatchPointerEvent(app.canvas, 'pointerdown', { pointerId: 5, clientX: 100, clientY: 100 });
+    dispatchPointerEvent(app.canvas, 'pointermove', { pointerId: 5, clientX: 60, clientY: 130 });
+    dispatchPointerEvent(app.canvas, 'pointerup', { pointerId: 5, clientX: 60, clientY: 130 });
+
+    expect(app.launchPenguin).not.toHaveBeenCalled();
+
+    app.isCameraTransitioning.mockReturnValue(false);
+    dispatchPointerEvent(app.canvas, 'pointerdown', { pointerId: 6, clientX: 100, clientY: 100 });
+    dispatchPointerEvent(app.canvas, 'pointermove', { pointerId: 6, clientX: 60, clientY: 130 });
+    dispatchPointerEvent(app.canvas, 'pointerup', { pointerId: 6, clientX: 60, clientY: 130 });
+
+    expect(app.launchPenguin).toHaveBeenCalledTimes(1);
+  });
 });
 
 async function bootApp(): Promise<BootContext> {
@@ -141,14 +171,24 @@ async function bootApp(): Promise<BootContext> {
   };
   const update = vi.fn();
   const dispose = vi.fn();
+  const transitionCameraToPenguin = vi.fn();
+  const isCameraTransitioning = vi.fn(() => false);
   const launchPenguin = vi.fn((gameState: GameState, launch: Vec2) => {
     gameState.phase = 'flying';
     gameState.velocity = launch;
+  });
+  const resetGame = vi.fn((gameState: GameState, startDistance = 0) => {
+    gameState.phase = 'aiming';
+    gameState.position = { x: startDistance, y: 1.1 };
+    gameState.distance = startDistance;
+    gameState.startDistance = startDistance;
   });
 
   vi.doMock('./render/world', () => ({
     createRenderWorld: vi.fn(() => ({
       update,
+      transitionCameraToPenguin,
+      isCameraTransitioning,
       resize: vi.fn(),
       dispose,
     })),
@@ -158,10 +198,7 @@ async function bootApp(): Promise<BootContext> {
     createGameState: vi.fn(() => state),
     launchPenguin,
     predictTrajectory: vi.fn(() => []),
-    resetGame: vi.fn((gameState: GameState) => {
-      gameState.phase = 'aiming';
-      gameState.distance = 0;
-    }),
+    resetGame,
     stepGame: vi.fn(),
   }));
   vi.doMock('./ui/hud', () => ({
@@ -187,8 +224,11 @@ async function bootApp(): Promise<BootContext> {
     cancelAnimationFrame,
     dispose,
     frameCallbacks,
+    isCameraTransitioning,
     launchPenguin,
+    resetGame,
     state,
+    transitionCameraToPenguin,
     update,
   };
 }
