@@ -83,12 +83,14 @@ describe('hud', () => {
     document.body.innerHTML = `
       <span id="distance"></span>
       <span id="best-distance"></span>
+      <span id="attempt-progress"></span>
       <button id="reset-button"></button>
     `;
 
     const hud = createHud({
       distanceElement: document.querySelector('#distance') as HTMLElement,
       bestDistanceElement: document.querySelector('#best-distance') as HTMLElement,
+      attemptProgressElement: document.querySelector('#attempt-progress') as HTMLElement,
       resetButton: document.querySelector('#reset-button') as HTMLButtonElement,
     });
 
@@ -103,12 +105,14 @@ describe('hud', () => {
     document.body.innerHTML = `
       <span id="distance"></span>
       <span id="best-distance"></span>
+      <span id="attempt-progress"></span>
       <button id="reset-button"></button>
     `;
     const resetButton = document.querySelector('#reset-button') as HTMLButtonElement;
     const hud = createHud({
       distanceElement: document.querySelector('#distance') as HTMLElement,
       bestDistanceElement: document.querySelector('#best-distance') as HTMLElement,
+      attemptProgressElement: document.querySelector('#attempt-progress') as HTMLElement,
       resetButton,
     });
 
@@ -126,6 +130,7 @@ describe('hud', () => {
     document.body.innerHTML = `
       <span id="distance"></span>
       <span id="best-distance"></span>
+      <span id="attempt-progress"></span>
       <button id="reset-button"></button>
     `;
     const resetButton = document.querySelector('#reset-button') as HTMLButtonElement;
@@ -133,6 +138,7 @@ describe('hud', () => {
     const hud = createHud({
       distanceElement: document.querySelector('#distance') as HTMLElement,
       bestDistanceElement: document.querySelector('#best-distance') as HTMLElement,
+      attemptProgressElement: document.querySelector('#attempt-progress') as HTMLElement,
       resetButton,
     });
 
@@ -140,5 +146,25 @@ describe('hud', () => {
     resetButton.click();
 
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates attempt progress when provided', () => {
+    document.body.innerHTML = `
+      <span id="distance"></span>
+      <span id="best-distance"></span>
+      <span id="attempt-progress"></span>
+      <button id="reset-button"></button>
+    `;
+
+    const hud = createHud({
+      distanceElement: document.querySelector('#distance') as HTMLElement,
+      bestDistanceElement: document.querySelector('#best-distance') as HTMLElement,
+      attemptProgressElement: document.querySelector('#attempt-progress') as HTMLElement,
+      resetButton: document.querySelector('#reset-button') as HTMLButtonElement,
+    });
+
+    hud.update({ distance: 12.3, bestDistance: 44.8, phase: 'flying', attemptNumber: 2, totalAttempts: 4 });
+
+    expect(document.querySelector('#attempt-progress')?.textContent).toBe('Attempt 2 / 4');
   });
 });

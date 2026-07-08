@@ -13,10 +13,41 @@
         <div class="hud__stats">
           <span id="distance">0 m</span>
           <span id="best-distance">Best 0 m</span>
+          <span id="attempt-progress"></span>
         </div>
         <button id="reset-button" type="button" aria-label="Reset run">Reset</button>
       </div>
       <div id="message" class="message" hidden></div>
+      <section id="setup-overlay" class="overlay" aria-labelledby="setup-title">
+        <div class="overlay__panel">
+          <h1 id="setup-title">Penguin Shoot</h1>
+          <label class="field">
+            <span>Attempts</span>
+            <input id="attempt-count" type="number" min="1" max="10" step="1" value="2" inputmode="numeric" />
+          </label>
+          <button id="start-session-button" class="primary-button" type="button">Start</button>
+        </div>
+      </section>
+      <section id="results-overlay" class="overlay" aria-labelledby="results-title" hidden>
+        <div class="overlay__panel overlay__panel--wide">
+          <h1 id="results-title">Results</h1>
+          <div class="results-table-wrap">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Attempt</th>
+                  <th>Start</th>
+                  <th>Added</th>
+                  <th>Score</th>
+                </tr>
+              </thead>
+              <tbody id="results-body"></tbody>
+            </table>
+          </div>
+          <button id="play-again-button" class="primary-button" type="button">Play Again</button>
+        </div>
+      </section>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
