@@ -20,6 +20,15 @@ describe('penguin launch simulation', () => {
     expect(state.distance).toBe(0);
   });
 
+  it('can start a run from a cumulative distance', () => {
+    const state = createGameState(0, [], 100);
+
+    expect(state.phase).toBe('aiming');
+    expect(state.startDistance).toBe(100);
+    expect(state.position).toEqual({ x: 100, y: LAUNCHER_POSITION.y });
+    expect(state.distance).toBe(100);
+  });
+
   it('launches with a clamped velocity from an aim vector', () => {
     const state = createGameState();
     launchPenguin(state, { x: 200, y: 120 });
@@ -95,6 +104,49 @@ describe('penguin launch simulation', () => {
     expect(state.distance).toBe(0);
   });
 
+  it('resets to a non-zero cumulative start distance while preserving best distance', () => {
+    const state = createGameState();
+    state.bestDistance = 140;
+    state.distance = 125;
+    state.phase = 'settled';
+
+    resetGame(state, 100);
+
+    expect(state.phase).toBe('aiming');
+    expect(state.startDistance).toBe(100);
+    expect(state.position).toEqual({ x: 100, y: LAUNCHER_POSITION.y });
+    expect(state.distance).toBe(100);
+    expect(state.bestDistance).toBe(140);
+    expect(state.mapItems.every((item) => item.position.x >= 100)).toBe(true);
+  });
+
+  it('can reset a later relay attempt on the ground at the settled position', () => {
+    const state = createGameState();
+
+    resetGame(state, 100, [], 0);
+
+    expect(state.phase).toBe('aiming');
+    expect(state.position).toEqual({ x: 100, y: 0 });
+    expect(state.distance).toBe(100);
+    expect(state.startDistance).toBe(100);
+  });
+
+  it('can reset to a saved map snapshot without regenerating old path items', () => {
+    const savedMapItems = [
+      { id: 'future-bomb', type: 'ice-bomb' as const, position: { x: 124, y: 0 }, radius: 0.9, consumed: false },
+      { id: 'future-geyser', type: 'geyser-vent' as const, position: { x: 148, y: 0 }, radius: 0.9, consumed: true },
+    ];
+    const state = createGameState();
+
+    resetGame(state, 100, savedMapItems);
+    savedMapItems[0].consumed = true;
+
+    expect(state.position).toEqual({ x: 100, y: LAUNCHER_POSITION.y });
+    expect(state.mapItems.map((item) => item.id)).toEqual(['future-bomb', 'future-geyser']);
+    expect(state.mapItems.every((item) => item.position.x >= 100)).toBe(true);
+    expect(state.mapItems[0].consumed).toBe(false);
+  });
+
   it('predicts a readable trajectory without mutating state', () => {
     const state = createGameState();
     const snapshot = {
@@ -146,6 +198,18 @@ describe('penguin launch simulation', () => {
     }
 
     expect(state.mapItems.slice(6, 12).map((item) => item.type)).not.toEqual(state.mapItems.slice(0, 6).map((item) => item.type));
+  });
+
+  it('generates missing map items ahead of a non-zero start distance after an empty reset snapshot', () => {
+    const state = createGameState(0, [], 100);
+    state.phase = 'flying';
+    state.position = { x: 100, y: 1 };
+    state.velocity = { x: 8, y: 0 };
+
+    stepGame(state, 1 / 60);
+
+    expect(state.mapItems.length).toBeGreaterThan(0);
+    expect(Math.min(...state.mapItems.map((item) => item.position.x))).toBeGreaterThanOrEqual(100);
   });
 
   it('ice bomb launches the penguin forward and upward once', () => {

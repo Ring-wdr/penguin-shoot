@@ -3,8 +3,11 @@ import * as THREE from 'three';
 import { LAUNCHER_POSITION } from '../simulation/game';
 import {
   applyCameraFocus,
+  calculateAimingCameraTargetX,
   calculateCameraBounds,
+  calculateCameraTargetForState,
   calculateCameraTargetX,
+  calculateTransitionedCameraX,
   calculateWorldChunkCenters,
   createMapItemVisual,
   createTrajectoryPoints,
@@ -22,8 +25,53 @@ describe('render world helpers', () => {
     expect(calculateCameraTargetX(20)).toBe(14);
   });
 
+  it('eases camera transition toward the next attempt framing', () => {
+    expect(calculateTransitionedCameraX(10, 30, 0, 520, false)).toBe(10);
+    expect(calculateTransitionedCameraX(10, 30, 260, 520, false)).toBeGreaterThan(29);
+    expect(calculateTransitionedCameraX(10, 30, 520, 520, false)).toBe(30);
+  });
+
+  it('snaps camera transition when reduced motion is requested', () => {
+    expect(calculateTransitionedCameraX(10, 30, 0, 520, true)).toBe(30);
+  });
+
   it('keeps the launcher visible in narrow mobile framing', () => {
     expect(calculateCameraTargetX(LAUNCHER_POSITION.x, 5.5)).toBeCloseTo(1.38, 2);
+  });
+
+  it('frames a later aiming attempt with the penguin on the left side', () => {
+    expect(calculateAimingCameraTargetX(100, 24)).toBe(106);
+    expect(calculateAimingCameraTargetX(100, 5.5)).toBeCloseTo(101.38, 2);
+  });
+
+  it('moves from the flight follow camera to the next aiming camera target', () => {
+    const flightCameraX = calculateCameraTargetX(100, 24);
+    const aimingCameraX = calculateAimingCameraTargetX(100, 24);
+
+    expect(flightCameraX).toBe(94);
+    expect(aimingCameraX).toBeGreaterThan(flightCameraX);
+  });
+
+  it('keeps a relay launch from pulling the camera behind the aiming frame', () => {
+    const flyingAtStart = {
+      phase: 'flying' as const,
+      position: { x: 100, y: 0 },
+      velocity: { x: 1, y: 0 },
+      distance: 100,
+      startDistance: 100,
+      bestDistance: 100,
+      flightTime: 0,
+      lastImpactTime: -1,
+      mapItems: [],
+    };
+    const slightlyForward = {
+      ...flyingAtStart,
+      position: { x: 105, y: 0 },
+      distance: 105,
+    };
+
+    expect(calculateCameraTargetForState(flyingAtStart, 24)).toBe(106);
+    expect(calculateCameraTargetForState(slightlyForward, 24)).toBe(106);
   });
 
   it('projects the ground into the lower part of the viewport', () => {

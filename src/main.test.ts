@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GameState, Vec2 } from './simulation/game';
+import type { GameState, MapItem, Vec2 } from './simulation/game';
 
 type FrameCallback = (time: number) => void;
 
@@ -8,8 +8,12 @@ type BootContext = {
   cancelAnimationFrame: ReturnType<typeof vi.fn>;
   dispose: ReturnType<typeof vi.fn>;
   frameCallbacks: Map<number, FrameCallback>;
+  isCameraTransitioning: ReturnType<typeof vi.fn>;
   launchPenguin: ReturnType<typeof vi.fn>;
+  resetGame: ReturnType<typeof vi.fn>;
   state: GameState;
+  transitionCameraToPenguin: ReturnType<typeof vi.fn>;
+  triggerReset: () => void;
   update: ReturnType<typeof vi.fn>;
 };
 
@@ -66,6 +70,73 @@ describe('main app integration', () => {
 
     expect(app.launchPenguin).not.toHaveBeenCalled();
   });
+
+  it('blocks launching until a relay session starts', async () => {
+    const app = await bootApp();
+
+    dispatchPointerEvent(app.canvas, 'pointerdown', { pointerId: 3, clientX: 100, clientY: 100 });
+    dispatchPointerEvent(app.canvas, 'pointermove', { pointerId: 3, clientX: 60, clientY: 130 });
+    dispatchPointerEvent(app.canvas, 'pointerup', { pointerId: 3, clientX: 60, clientY: 130 });
+
+    expect(app.launchPenguin).not.toHaveBeenCalled();
+
+    document.querySelector<HTMLButtonElement>('#start-session-button')?.click();
+    dispatchPointerEvent(app.canvas, 'pointerdown', { pointerId: 4, clientX: 100, clientY: 100 });
+    dispatchPointerEvent(app.canvas, 'pointermove', { pointerId: 4, clientX: 60, clientY: 130 });
+    dispatchPointerEvent(app.canvas, 'pointerup', { pointerId: 4, clientX: 60, clientY: 130 });
+
+    expect(app.launchPenguin).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks launching while the camera moves to the next relay attempt', async () => {
+    const app = await bootApp();
+    document.querySelector<HTMLInputElement>('#attempt-count')!.value = '2';
+    document.querySelector<HTMLButtonElement>('#start-session-button')?.click();
+
+    app.state.phase = 'settled';
+    app.state.distance = 100;
+    app.frameCallbacks.get(1)?.(16);
+
+    expect(app.transitionCameraToPenguin).toHaveBeenCalledTimes(1);
+    expect(app.resetGame).toHaveBeenLastCalledWith(app.state, 100, [], 0);
+
+    app.isCameraTransitioning.mockReturnValue(true);
+    dispatchPointerEvent(app.canvas, 'pointerdown', { pointerId: 5, clientX: 100, clientY: 100 });
+    dispatchPointerEvent(app.canvas, 'pointermove', { pointerId: 5, clientX: 60, clientY: 130 });
+    dispatchPointerEvent(app.canvas, 'pointerup', { pointerId: 5, clientX: 60, clientY: 130 });
+
+    expect(app.launchPenguin).not.toHaveBeenCalled();
+
+    app.isCameraTransitioning.mockReturnValue(false);
+    dispatchPointerEvent(app.canvas, 'pointerdown', { pointerId: 6, clientX: 100, clientY: 100 });
+    dispatchPointerEvent(app.canvas, 'pointermove', { pointerId: 6, clientX: 60, clientY: 130 });
+    dispatchPointerEvent(app.canvas, 'pointerup', { pointerId: 6, clientX: 60, clientY: 130 });
+
+    expect(app.launchPenguin).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the next attempt map snapshot when reset is clicked', async () => {
+    const app = await bootApp();
+    const nextMap: MapItem[] = [
+      { id: 'old-bomb', type: 'ice-bomb', position: { x: 82, y: 0 }, radius: 0.9, consumed: false },
+      { id: 'future-bomb', type: 'ice-bomb', position: { x: 124, y: 0 }, radius: 0.9, consumed: false },
+    ];
+    const expectedNextMap = [nextMap[1]];
+    document.querySelector<HTMLInputElement>('#attempt-count')!.value = '2';
+    document.querySelector<HTMLButtonElement>('#start-session-button')?.click();
+
+    app.state.mapItems = nextMap.map((item) => ({ ...item, position: { ...item.position } }));
+    app.state.phase = 'settled';
+    app.state.distance = 100;
+    app.frameCallbacks.get(1)?.(16);
+
+    expect(app.resetGame).toHaveBeenLastCalledWith(app.state, 100, expectedNextMap, 0);
+
+    app.state.mapItems[0].consumed = true;
+    app.triggerReset();
+
+    expect(app.resetGame).toHaveBeenLastCalledWith(app.state, 100, expectedNextMap, 0);
+  });
 });
 
 async function bootApp(): Promise<BootContext> {
@@ -74,8 +145,19 @@ async function bootApp(): Promise<BootContext> {
       <canvas id="game-canvas"></canvas>
       <span id="distance"></span>
       <span id="best-distance"></span>
+      <span id="attempt-progress"></span>
       <button id="reset-button" type="button"></button>
       <div id="message" hidden></div>
+      <section id="setup-overlay">
+        <input id="attempt-count" value="1" />
+        <button id="start-session-button" type="button"></button>
+      </section>
+      <section id="results-overlay" hidden>
+        <table>
+          <tbody id="results-body"></tbody>
+        </table>
+        <button id="play-again-button" type="button"></button>
+      </section>
     </div>
   `;
 
@@ -105,6 +187,7 @@ async function bootApp(): Promise<BootContext> {
     position: { x: 0, y: 1.1 },
     velocity: { x: 0, y: 0 },
     distance: 0,
+    startDistance: 0,
     bestDistance: 0,
     flightTime: 0,
     lastImpactTime: -1,
@@ -112,14 +195,26 @@ async function bootApp(): Promise<BootContext> {
   };
   const update = vi.fn();
   const dispose = vi.fn();
+  const transitionCameraToPenguin = vi.fn();
+  const isCameraTransitioning = vi.fn(() => false);
+  let resetHandler: (() => void) | null = null;
   const launchPenguin = vi.fn((gameState: GameState, launch: Vec2) => {
     gameState.phase = 'flying';
     gameState.velocity = launch;
+  });
+  const resetGame = vi.fn((gameState: GameState, startDistance = 0, mapItems: MapItem[] = [], startY = 1.1) => {
+    gameState.phase = 'aiming';
+    gameState.position = { x: startDistance, y: startY };
+    gameState.distance = startDistance;
+    gameState.startDistance = startDistance;
+    gameState.mapItems = mapItems.map((item) => ({ ...item, position: { ...item.position } }));
   });
 
   vi.doMock('./render/world', () => ({
     createRenderWorld: vi.fn(() => ({
       update,
+      transitionCameraToPenguin,
+      isCameraTransitioning,
       resize: vi.fn(),
       dispose,
     })),
@@ -129,10 +224,7 @@ async function bootApp(): Promise<BootContext> {
     createGameState: vi.fn(() => state),
     launchPenguin,
     predictTrajectory: vi.fn(() => []),
-    resetGame: vi.fn((gameState: GameState) => {
-      gameState.phase = 'aiming';
-      gameState.distance = 0;
-    }),
+    resetGame,
     stepGame: vi.fn(),
   }));
   vi.doMock('./ui/hud', () => ({
@@ -142,7 +234,9 @@ async function bootApp(): Promise<BootContext> {
     })),
     createHud: vi.fn(() => ({
       update: vi.fn(),
-      onReset: vi.fn(),
+      onReset: vi.fn((handler: () => void) => {
+        resetHandler = handler;
+      }),
     })),
   }));
 
@@ -158,8 +252,17 @@ async function bootApp(): Promise<BootContext> {
     cancelAnimationFrame,
     dispose,
     frameCallbacks,
+    isCameraTransitioning,
     launchPenguin,
+    resetGame,
     state,
+    transitionCameraToPenguin,
+    triggerReset: () => {
+      if (!resetHandler) {
+        throw new Error('Reset handler was not registered.');
+      }
+      resetHandler();
+    },
     update,
   };
 }

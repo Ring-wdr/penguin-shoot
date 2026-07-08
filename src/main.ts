@@ -2,44 +2,112 @@ import './styles.css';
 import { createPointerAim, getLaunchVector } from './input/pointerAim';
 import { createRenderWorld } from './render/world';
 import {
-  LAUNCHER_POSITION,
   createGameState,
   launchPenguin,
   predictTrajectory,
   resetGame,
   stepGame,
+  type MapItem,
   type Vec2,
 } from './simulation/game';
+import {
+  createRelaySession,
+  getCurrentAttempt,
+  getSortedResults,
+  recordAttempt,
+  type RelaySession,
+} from './session/multiplayer';
 import { createBestDistanceStore, createHud } from './ui/hud';
+import { createRelayOverlays } from './ui/overlays';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas');
 const distanceElement = document.querySelector<HTMLElement>('#distance');
 const bestDistanceElement = document.querySelector<HTMLElement>('#best-distance');
+const attemptProgressElement = document.querySelector<HTMLElement>('#attempt-progress');
 const resetButton = document.querySelector<HTMLButtonElement>('#reset-button');
 const message = document.querySelector<HTMLElement>('#message');
+const setupOverlay = document.querySelector<HTMLElement>('#setup-overlay');
+const attemptCountInput = document.querySelector<HTMLInputElement>('#attempt-count');
+const startSessionButton = document.querySelector<HTMLButtonElement>('#start-session-button');
+const resultsOverlay = document.querySelector<HTMLElement>('#results-overlay');
+const resultsBody = document.querySelector<HTMLElement>('#results-body');
+const playAgainButton = document.querySelector<HTMLButtonElement>('#play-again-button');
 
-if (!canvas || !distanceElement || !bestDistanceElement || !resetButton || !message) {
+if (
+  !canvas ||
+  !distanceElement ||
+  !bestDistanceElement ||
+  !attemptProgressElement ||
+  !resetButton ||
+  !message ||
+  !setupOverlay ||
+  !attemptCountInput ||
+  !startSessionButton ||
+  !resultsOverlay ||
+  !resultsBody ||
+  !playAgainButton
+) {
   throw new Error('Penguin Shoot could not find required DOM elements.');
 }
 
 const bestDistanceStore = createBestDistanceStore('penguin-shoot:best-distance');
 const state = createGameState(bestDistanceStore.load());
 const aim = createPointerAim();
-const hud = createHud({ distanceElement, bestDistanceElement, resetButton });
+const hud = createHud({ distanceElement, bestDistanceElement, attemptProgressElement, resetButton });
+const overlays = createRelayOverlays({
+  setupOverlay,
+  attemptCountInput,
+  startButton: startSessionButton,
+  resultsOverlay,
+  resultsBody,
+  playAgainButton,
+});
 const world = createRenderWorld(canvas);
 
 let lastFrameTime = performance.now();
 let animationFrame = 0;
 let isRunning = true;
 let isWorldDisposed = false;
+let session: RelaySession | null = null;
+let recordedSettledAttempt = false;
+let attemptStartMapItems = cloneMapItems(state.mapItems);
+let attemptStartY = state.position.y;
+const GROUND_START_Y = 0;
 
 hud.onReset(() => {
-  resetGame(state);
-  hud.update(state);
+  const currentAttempt = session ? getCurrentAttempt(session) : null;
+  resetGame(state, currentAttempt?.startDistance ?? 0, attemptStartMapItems, attemptStartY);
+  recordedSettledAttempt = false;
+  if (currentAttempt) {
+    world.transitionCameraToPenguin(state);
+  }
+  hud.update(getHudState());
+});
+
+overlays.onStart((attemptCount) => {
+  session = createRelaySession(attemptCount);
+  recordedSettledAttempt = false;
+  overlays.hideSetup();
+  overlays.hideResults();
+  resetGame(state, 0);
+  attemptStartMapItems = cloneMapItems(state.mapItems);
+  attemptStartY = state.position.y;
+  hud.update(getHudState());
+});
+
+overlays.onPlayAgain(() => {
+  session = null;
+  recordedSettledAttempt = false;
+  overlays.hideResults();
+  resetGame(state, 0);
+  attemptStartMapItems = cloneMapItems(state.mapItems);
+  attemptStartY = state.position.y;
+  overlays.showSetup();
+  hud.update(getHudState());
 });
 
 canvas.addEventListener('pointerdown', (event) => {
-  if (!isRunning || state.phase !== 'aiming') {
+  if (!canPlay() || state.phase !== 'aiming') {
     return;
   }
 
@@ -49,7 +117,7 @@ canvas.addEventListener('pointerdown', (event) => {
 });
 
 canvas.addEventListener('pointermove', (event) => {
-  if (!isRunning || !aim.isDragging) {
+  if (!canPlay() || !aim.isDragging) {
     return;
   }
 
@@ -58,7 +126,7 @@ canvas.addEventListener('pointermove', (event) => {
 });
 
 canvas.addEventListener('pointerup', (event) => {
-  if (!isRunning || !aim.isDragging) {
+  if (!canPlay() || !aim.isDragging) {
     return;
   }
 
@@ -107,15 +175,16 @@ function frame(now: number): void {
   stepGame(state, deltaSeconds);
   if (state.phase === 'settled') {
     bestDistanceStore.save(state.bestDistance);
+    handleSettledAttempt();
   }
 
   const launchVector = getLaunchVector(aim);
   const trajectory = state.phase === 'aiming' && aim.isDragging ? predictTrajectory(state, launchVector, 24) : [];
   const aimEnd = aim.isDragging ? screenDragToWorldEnd(aim.dragVector) : null;
-  const aimStart = aim.isDragging ? { ...LAUNCHER_POSITION } : null;
+  const aimStart = aim.isDragging ? { ...state.position } : null;
 
   world.update(state, trajectory, aimStart, aimEnd);
-  hud.update(state);
+  hud.update(getHudState());
   if (isRunning) {
     animationFrame = requestAnimationFrame(frame);
   }
@@ -123,13 +192,13 @@ function frame(now: number): void {
 
 function screenDragToWorldEnd(dragVector: Vec2): Vec2 {
   return {
-    x: LAUNCHER_POSITION.x + dragVector.x / 70,
-    y: LAUNCHER_POSITION.y - dragVector.y / 70,
+    x: state.position.x + dragVector.x / 70,
+    y: state.position.y - dragVector.y / 70,
   };
 }
 
 animationFrame = requestAnimationFrame(frame);
-hud.update(state);
+hud.update(getHudState());
 
 window.addEventListener('beforeunload', () => {
   shutdown();
@@ -139,6 +208,43 @@ function cancelActiveAim(): void {
   if (aim.pointerId !== null) {
     aim.cancel(aim.pointerId);
   }
+}
+
+function canPlay(): boolean {
+  return isRunning && session?.status === 'playing' && !world.isCameraTransitioning();
+}
+
+function handleSettledAttempt(): void {
+  if (!session || recordedSettledAttempt) {
+    return;
+  }
+
+  recordedSettledAttempt = true;
+  recordAttempt(session, state.distance);
+
+  if (session.status === 'complete') {
+    overlays.showResults(getSortedResults(session));
+    hud.update(getHudState());
+    return;
+  }
+
+  const nextAttempt = getCurrentAttempt(session);
+  if (nextAttempt) {
+    attemptStartMapItems = cloneMapItemsFromStart(state.mapItems, nextAttempt.startDistance);
+    attemptStartY = GROUND_START_Y;
+    resetGame(state, nextAttempt.startDistance, attemptStartMapItems, attemptStartY);
+    world.transitionCameraToPenguin(state);
+    recordedSettledAttempt = false;
+  }
+}
+
+function getHudState(): Parameters<typeof hud.update>[0] {
+  const currentAttempt = session ? getCurrentAttempt(session) : null;
+  return {
+    ...state,
+    attemptNumber: currentAttempt?.attemptNumber,
+    totalAttempts: session?.totalAttempts,
+  };
 }
 
 function shutdown(): void {
@@ -152,4 +258,15 @@ function shutdown(): void {
     isWorldDisposed = true;
     world.dispose();
   }
+}
+
+function cloneMapItems(items: MapItem[]): MapItem[] {
+  return items.map((item) => ({
+    ...item,
+    position: { ...item.position },
+  }));
+}
+
+function cloneMapItemsFromStart(items: MapItem[], startDistance: number): MapItem[] {
+  return cloneMapItems(items).filter((item) => item.position.x >= startDistance);
 }

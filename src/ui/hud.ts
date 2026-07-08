@@ -3,13 +3,17 @@ import type { GamePhase } from '../simulation/game';
 export type HudElements = {
   distanceElement: HTMLElement;
   bestDistanceElement: HTMLElement;
+  attemptProgressElement?: HTMLElement;
   resetButton: HTMLButtonElement;
 };
 
 export type HudState = {
   distance: number;
+  startDistance?: number;
   bestDistance: number;
   phase: GamePhase;
+  attemptNumber?: number;
+  totalAttempts?: number;
 };
 
 export type Hud = {
@@ -40,7 +44,11 @@ export function createHud(elements: HudElements): Hud {
     update: (state) => {
       elements.distanceElement.textContent = `${Math.round(state.distance)} m`;
       elements.bestDistanceElement.textContent = `Best ${Math.round(state.bestDistance)} m`;
-      elements.resetButton.disabled = state.phase === 'aiming' && state.distance === 0;
+      if (elements.attemptProgressElement) {
+        elements.attemptProgressElement.textContent =
+          state.attemptNumber && state.totalAttempts ? `Attempt ${state.attemptNumber} / ${state.totalAttempts}` : '';
+      }
+      elements.resetButton.disabled = state.phase === 'aiming' && state.distance === (state.startDistance ?? 0);
     },
     onReset: (handler) => {
       elements.resetButton.addEventListener('click', handler);

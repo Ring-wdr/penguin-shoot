@@ -10,6 +10,7 @@ export type GameState = {
   position: Vec2;
   velocity: Vec2;
   distance: number;
+  startDistance: number;
   bestDistance: number;
   flightTime: number;
   lastImpactTime: number;
@@ -56,34 +57,44 @@ const ITEM_TYPES: MapItemType[] = [
   'snow-tornado',
 ];
 
-export function createGameState(bestDistance = 0, mapItems = createMapItems()): GameState {
+export function createGameState(bestDistance = 0, mapItems: MapItem[] | undefined = undefined, startDistance = 0): GameState {
+  const safeStartDistance = sanitizeDistance(startDistance);
   return {
     phase: 'aiming',
-    position: { ...LAUNCHER_POSITION },
+    position: { x: safeStartDistance, y: LAUNCHER_POSITION.y },
     velocity: { x: 0, y: 0 },
-    distance: 0,
+    distance: safeStartDistance,
+    startDistance: safeStartDistance,
     bestDistance,
     flightTime: 0,
     lastImpactTime: -1,
-    mapItems: cloneMapItems(mapItems),
+    mapItems: cloneMapItems(mapItems ?? createMapItems(undefined, safeStartDistance)),
   };
 }
 
-export function resetGame(state: GameState): void {
+export function resetGame(
+  state: GameState,
+  startDistance = 0,
+  mapItems: MapItem[] | undefined = undefined,
+  startY = LAUNCHER_POSITION.y,
+): void {
+  const safeStartDistance = sanitizeDistance(startDistance);
   state.phase = 'aiming';
-  state.position = { ...LAUNCHER_POSITION };
+  state.position = { x: safeStartDistance, y: sanitizeHeight(startY) };
   state.velocity = { x: 0, y: 0 };
-  state.distance = 0;
+  state.distance = safeStartDistance;
+  state.startDistance = safeStartDistance;
   state.flightTime = 0;
   state.lastImpactTime = -1;
-  state.mapItems = createMapItems();
+  state.mapItems = cloneMapItems(mapItems ?? createMapItems(undefined, safeStartDistance));
 }
 
-export function createMapItems(seed = Math.floor(Math.random() * 1_000_000)): MapItem[] {
+export function createMapItems(seed = Math.floor(Math.random() * 1_000_000), startDistance = 0): MapItem[] {
   const random = createSeededRandom(seed);
   const items: MapItem[] = [];
+  const safeStartDistance = sanitizeDistance(startDistance);
 
-  appendRandomizedMapItemBatch(items, random, 14 + random() * 8);
+  appendRandomizedMapItemBatch(items, random, safeStartDistance + 14 + random() * 8);
   return items;
 }
 
@@ -115,7 +126,7 @@ export function stepGame(state: GameState, deltaSeconds: number): void {
 }
 
 export function predictTrajectory(state: GameState, aimVelocity: Vec2, sampleCount: number): Vec2[] {
-  const preview = createGameState(state.bestDistance);
+  const preview = createGameState(state.bestDistance, state.mapItems, state.startDistance);
   preview.position = { ...state.position };
   launchPenguin(preview, aimVelocity);
 
@@ -153,7 +164,7 @@ function integrateStep(state: GameState, deltaSeconds: number): void {
 
   applyMapItemEffects(state, deltaSeconds);
 
-  state.distance = Math.max(0, state.position.x - LAUNCHER_POSITION.x);
+  state.distance = Math.max(state.startDistance, state.position.x);
   state.bestDistance = Math.max(state.bestDistance, state.distance);
   ensureMapItemsAhead(state);
 
@@ -165,7 +176,7 @@ function integrateStep(state: GameState, deltaSeconds: number): void {
 
 function ensureMapItemsAhead(state: GameState): void {
   const targetX = state.position.x + ITEM_LOOKAHEAD_DISTANCE;
-  let farthestItemX = getFarthestItemX(state.mapItems);
+  let farthestItemX = getFarthestItemX(state.mapItems, state.startDistance);
 
   while (farthestItemX < targetX) {
     const random = createSeededRandom(Math.floor(farthestItemX * 1000) + state.mapItems.length * 97);
@@ -173,9 +184,9 @@ function ensureMapItemsAhead(state: GameState): void {
   }
 }
 
-function getFarthestItemX(items: MapItem[]): number {
+function getFarthestItemX(items: MapItem[], startDistance = 0): number {
   if (items.length === 0) {
-    return 14;
+    return sanitizeDistance(startDistance) + 14;
   }
 
   return Math.max(...items.map((item) => item.position.x));
@@ -280,6 +291,14 @@ function cloneMapItems(items: MapItem[]): MapItem[] {
     ...item,
     position: { ...item.position },
   }));
+}
+
+function sanitizeDistance(distance: number): number {
+  return Number.isFinite(distance) && distance > 0 ? distance : 0;
+}
+
+function sanitizeHeight(height: number): number {
+  return Number.isFinite(height) && height >= 0 ? height : LAUNCHER_POSITION.y;
 }
 
 function getItemRadius(type: MapItemType): number {

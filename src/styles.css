@@ -78,6 +78,12 @@ body {
   color: #31576b;
 }
 
+#attempt-progress {
+  min-height: 14px;
+  font-size: 12px;
+  color: #21475a;
+}
+
 #reset-button {
   width: 64px;
   min-height: 40px;
@@ -110,6 +116,107 @@ body {
   text-align: center;
 }
 
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(16, 37, 50, 0.38);
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.overlay__panel {
+  width: min(360px, 100%);
+  padding: 18px;
+  border: 1px solid rgba(13, 51, 67, 0.16);
+  border-radius: 8px;
+  background: rgba(248, 253, 255, 0.96);
+  box-shadow: 0 18px 38px rgba(24, 84, 110, 0.22);
+}
+
+.overlay__panel--wide {
+  width: min(620px, 100%);
+}
+
+.overlay__panel h1 {
+  margin: 0 0 16px;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #31576b;
+}
+
+.field input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(13, 51, 67, 0.22);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  color: #102532;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.primary-button {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: #143241;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.results-table-wrap {
+  max-height: min(360px, 54vh);
+  margin-bottom: 14px;
+  overflow: auto;
+  border: 1px solid rgba(13, 51, 67, 0.14);
+  border-radius: 8px;
+}
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.results-table th,
+.results-table td {
+  padding: 9px 10px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(13, 51, 67, 0.1);
+}
+
+.results-table th {
+  position: sticky;
+  top: 0;
+  background: #e9f8fc;
+  color: #31576b;
+  font-size: 12px;
+}
+
+.results-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 @media (max-width: 560px) {
   .hud {
     top: max(10px, env(safe-area-inset-top));
@@ -129,9 +236,26 @@ body {
     font-size: 12px;
   }
 
+  #attempt-progress {
+    font-size: 11px;
+  }
+
   #reset-button {
     width: 58px;
     min-height: 38px;
     font-size: 12px;
+  }
+
+  .overlay__panel {
+    padding: 15px;
+  }
+
+  .results-table {
+    font-size: 12px;
+  }
+
+  .results-table th,
+  .results-table td {
+    padding: 8px;
   }
 }
