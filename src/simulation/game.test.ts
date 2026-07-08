@@ -120,6 +120,17 @@ describe('penguin launch simulation', () => {
     expect(state.mapItems.every((item) => item.position.x >= 100)).toBe(true);
   });
 
+  it('can reset a later relay attempt on the ground at the settled position', () => {
+    const state = createGameState();
+
+    resetGame(state, 100, [], 0);
+
+    expect(state.phase).toBe('aiming');
+    expect(state.position).toEqual({ x: 100, y: 0 });
+    expect(state.distance).toBe(100);
+    expect(state.startDistance).toBe(100);
+  });
+
   it('can reset to a saved map snapshot without regenerating old path items', () => {
     const savedMapItems = [
       { id: 'future-bomb', type: 'ice-bomb' as const, position: { x: 124, y: 0 }, radius: 0.9, consumed: false },

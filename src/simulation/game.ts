@@ -72,10 +72,15 @@ export function createGameState(bestDistance = 0, mapItems: MapItem[] | undefine
   };
 }
 
-export function resetGame(state: GameState, startDistance = 0, mapItems: MapItem[] | undefined = undefined): void {
+export function resetGame(
+  state: GameState,
+  startDistance = 0,
+  mapItems: MapItem[] | undefined = undefined,
+  startY = LAUNCHER_POSITION.y,
+): void {
   const safeStartDistance = sanitizeDistance(startDistance);
   state.phase = 'aiming';
-  state.position = { x: safeStartDistance, y: LAUNCHER_POSITION.y };
+  state.position = { x: safeStartDistance, y: sanitizeHeight(startY) };
   state.velocity = { x: 0, y: 0 };
   state.distance = safeStartDistance;
   state.startDistance = safeStartDistance;
@@ -290,6 +295,10 @@ function cloneMapItems(items: MapItem[]): MapItem[] {
 
 function sanitizeDistance(distance: number): number {
   return Number.isFinite(distance) && distance > 0 ? distance : 0;
+}
+
+function sanitizeHeight(height: number): number {
+  return Number.isFinite(height) && height >= 0 ? height : LAUNCHER_POSITION.y;
 }
 
 function getItemRadius(type: MapItemType): number {

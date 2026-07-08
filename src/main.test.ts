@@ -98,7 +98,7 @@ describe('main app integration', () => {
     app.frameCallbacks.get(1)?.(16);
 
     expect(app.transitionCameraToPenguin).toHaveBeenCalledTimes(1);
-    expect(app.resetGame).toHaveBeenLastCalledWith(app.state, 100, []);
+    expect(app.resetGame).toHaveBeenLastCalledWith(app.state, 100, [], 0);
 
     app.isCameraTransitioning.mockReturnValue(true);
     dispatchPointerEvent(app.canvas, 'pointerdown', { pointerId: 5, clientX: 100, clientY: 100 });
@@ -130,12 +130,12 @@ describe('main app integration', () => {
     app.state.distance = 100;
     app.frameCallbacks.get(1)?.(16);
 
-    expect(app.resetGame).toHaveBeenLastCalledWith(app.state, 100, expectedNextMap);
+    expect(app.resetGame).toHaveBeenLastCalledWith(app.state, 100, expectedNextMap, 0);
 
     app.state.mapItems[0].consumed = true;
     app.triggerReset();
 
-    expect(app.resetGame).toHaveBeenLastCalledWith(app.state, 100, expectedNextMap);
+    expect(app.resetGame).toHaveBeenLastCalledWith(app.state, 100, expectedNextMap, 0);
   });
 });
 
@@ -202,9 +202,9 @@ async function bootApp(): Promise<BootContext> {
     gameState.phase = 'flying';
     gameState.velocity = launch;
   });
-  const resetGame = vi.fn((gameState: GameState, startDistance = 0, mapItems: MapItem[] = []) => {
+  const resetGame = vi.fn((gameState: GameState, startDistance = 0, mapItems: MapItem[] = [], startY = 1.1) => {
     gameState.phase = 'aiming';
-    gameState.position = { x: startDistance, y: 1.1 };
+    gameState.position = { x: startDistance, y: startY };
     gameState.distance = startDistance;
     gameState.startDistance = startDistance;
     gameState.mapItems = mapItems.map((item) => ({ ...item, position: { ...item.position } }));

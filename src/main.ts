@@ -71,10 +71,12 @@ let isWorldDisposed = false;
 let session: RelaySession | null = null;
 let recordedSettledAttempt = false;
 let attemptStartMapItems = cloneMapItems(state.mapItems);
+let attemptStartY = state.position.y;
+const GROUND_START_Y = 0;
 
 hud.onReset(() => {
   const currentAttempt = session ? getCurrentAttempt(session) : null;
-  resetGame(state, currentAttempt?.startDistance ?? 0, attemptStartMapItems);
+  resetGame(state, currentAttempt?.startDistance ?? 0, attemptStartMapItems, attemptStartY);
   recordedSettledAttempt = false;
   if (currentAttempt) {
     world.transitionCameraToPenguin(state);
@@ -89,6 +91,7 @@ overlays.onStart((attemptCount) => {
   overlays.hideResults();
   resetGame(state, 0);
   attemptStartMapItems = cloneMapItems(state.mapItems);
+  attemptStartY = state.position.y;
   hud.update(getHudState());
 });
 
@@ -98,6 +101,7 @@ overlays.onPlayAgain(() => {
   overlays.hideResults();
   resetGame(state, 0);
   attemptStartMapItems = cloneMapItems(state.mapItems);
+  attemptStartY = state.position.y;
   overlays.showSetup();
   hud.update(getHudState());
 });
@@ -227,7 +231,8 @@ function handleSettledAttempt(): void {
   const nextAttempt = getCurrentAttempt(session);
   if (nextAttempt) {
     attemptStartMapItems = cloneMapItemsFromStart(state.mapItems, nextAttempt.startDistance);
-    resetGame(state, nextAttempt.startDistance, attemptStartMapItems);
+    attemptStartY = GROUND_START_Y;
+    resetGame(state, nextAttempt.startDistance, attemptStartMapItems, attemptStartY);
     world.transitionCameraToPenguin(state);
     recordedSettledAttempt = false;
   }
