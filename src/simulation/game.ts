@@ -10,6 +10,7 @@ export type GameState = {
   position: Vec2;
   velocity: Vec2;
   distance: number;
+  startDistance: number;
   bestDistance: number;
   flightTime: number;
   lastImpactTime: number;
@@ -56,12 +57,14 @@ const ITEM_TYPES: MapItemType[] = [
   'snow-tornado',
 ];
 
-export function createGameState(bestDistance = 0, mapItems = createMapItems()): GameState {
+export function createGameState(bestDistance = 0, mapItems = createMapItems(), startDistance = 0): GameState {
+  const safeStartDistance = sanitizeDistance(startDistance);
   return {
     phase: 'aiming',
-    position: { ...LAUNCHER_POSITION },
+    position: { x: safeStartDistance, y: LAUNCHER_POSITION.y },
     velocity: { x: 0, y: 0 },
-    distance: 0,
+    distance: safeStartDistance,
+    startDistance: safeStartDistance,
     bestDistance,
     flightTime: 0,
     lastImpactTime: -1,
@@ -69,11 +72,13 @@ export function createGameState(bestDistance = 0, mapItems = createMapItems()): 
   };
 }
 
-export function resetGame(state: GameState): void {
+export function resetGame(state: GameState, startDistance = 0): void {
+  const safeStartDistance = sanitizeDistance(startDistance);
   state.phase = 'aiming';
-  state.position = { ...LAUNCHER_POSITION };
+  state.position = { x: safeStartDistance, y: LAUNCHER_POSITION.y };
   state.velocity = { x: 0, y: 0 };
-  state.distance = 0;
+  state.distance = safeStartDistance;
+  state.startDistance = safeStartDistance;
   state.flightTime = 0;
   state.lastImpactTime = -1;
   state.mapItems = createMapItems();
@@ -115,7 +120,7 @@ export function stepGame(state: GameState, deltaSeconds: number): void {
 }
 
 export function predictTrajectory(state: GameState, aimVelocity: Vec2, sampleCount: number): Vec2[] {
-  const preview = createGameState(state.bestDistance);
+  const preview = createGameState(state.bestDistance, state.mapItems, state.startDistance);
   preview.position = { ...state.position };
   launchPenguin(preview, aimVelocity);
 
@@ -153,7 +158,7 @@ function integrateStep(state: GameState, deltaSeconds: number): void {
 
   applyMapItemEffects(state, deltaSeconds);
 
-  state.distance = Math.max(0, state.position.x - LAUNCHER_POSITION.x);
+  state.distance = Math.max(state.startDistance, state.position.x);
   state.bestDistance = Math.max(state.bestDistance, state.distance);
   ensureMapItemsAhead(state);
 
@@ -280,6 +285,10 @@ function cloneMapItems(items: MapItem[]): MapItem[] {
     ...item,
     position: { ...item.position },
   }));
+}
+
+function sanitizeDistance(distance: number): number {
+  return Number.isFinite(distance) && distance > 0 ? distance : 0;
 }
 
 function getItemRadius(type: MapItemType): number {

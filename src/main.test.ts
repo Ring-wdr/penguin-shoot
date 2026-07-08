@@ -105,6 +105,7 @@ async function bootApp(): Promise<BootContext> {
     position: { x: 0, y: 1.1 },
     velocity: { x: 0, y: 0 },
     distance: 0,
+    startDistance: 0,
     bestDistance: 0,
     flightTime: 0,
     lastImpactTime: -1,

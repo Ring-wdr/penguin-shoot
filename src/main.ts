@@ -2,7 +2,6 @@ import './styles.css';
 import { createPointerAim, getLaunchVector } from './input/pointerAim';
 import { createRenderWorld } from './render/world';
 import {
-  LAUNCHER_POSITION,
   createGameState,
   launchPenguin,
   predictTrajectory,
@@ -112,7 +111,7 @@ function frame(now: number): void {
   const launchVector = getLaunchVector(aim);
   const trajectory = state.phase === 'aiming' && aim.isDragging ? predictTrajectory(state, launchVector, 24) : [];
   const aimEnd = aim.isDragging ? screenDragToWorldEnd(aim.dragVector) : null;
-  const aimStart = aim.isDragging ? { ...LAUNCHER_POSITION } : null;
+  const aimStart = aim.isDragging ? { ...state.position } : null;
 
   world.update(state, trajectory, aimStart, aimEnd);
   hud.update(state);
@@ -123,8 +122,8 @@ function frame(now: number): void {
 
 function screenDragToWorldEnd(dragVector: Vec2): Vec2 {
   return {
-    x: LAUNCHER_POSITION.x + dragVector.x / 70,
-    y: LAUNCHER_POSITION.y - dragVector.y / 70,
+    x: state.position.x + dragVector.x / 70,
+    y: state.position.y - dragVector.y / 70,
   };
 }
 
