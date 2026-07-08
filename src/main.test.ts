@@ -66,6 +66,23 @@ describe('main app integration', () => {
 
     expect(app.launchPenguin).not.toHaveBeenCalled();
   });
+
+  it('blocks launching until a relay session starts', async () => {
+    const app = await bootApp();
+
+    dispatchPointerEvent(app.canvas, 'pointerdown', { pointerId: 3, clientX: 100, clientY: 100 });
+    dispatchPointerEvent(app.canvas, 'pointermove', { pointerId: 3, clientX: 60, clientY: 130 });
+    dispatchPointerEvent(app.canvas, 'pointerup', { pointerId: 3, clientX: 60, clientY: 130 });
+
+    expect(app.launchPenguin).not.toHaveBeenCalled();
+
+    document.querySelector<HTMLButtonElement>('#start-session-button')?.click();
+    dispatchPointerEvent(app.canvas, 'pointerdown', { pointerId: 4, clientX: 100, clientY: 100 });
+    dispatchPointerEvent(app.canvas, 'pointermove', { pointerId: 4, clientX: 60, clientY: 130 });
+    dispatchPointerEvent(app.canvas, 'pointerup', { pointerId: 4, clientX: 60, clientY: 130 });
+
+    expect(app.launchPenguin).toHaveBeenCalledTimes(1);
+  });
 });
 
 async function bootApp(): Promise<BootContext> {
@@ -74,8 +91,19 @@ async function bootApp(): Promise<BootContext> {
       <canvas id="game-canvas"></canvas>
       <span id="distance"></span>
       <span id="best-distance"></span>
+      <span id="attempt-progress"></span>
       <button id="reset-button" type="button"></button>
       <div id="message" hidden></div>
+      <section id="setup-overlay">
+        <input id="attempt-count" value="1" />
+        <button id="start-session-button" type="button"></button>
+      </section>
+      <section id="results-overlay" hidden>
+        <table>
+          <tbody id="results-body"></tbody>
+        </table>
+        <button id="play-again-button" type="button"></button>
+      </section>
     </div>
   `;
 

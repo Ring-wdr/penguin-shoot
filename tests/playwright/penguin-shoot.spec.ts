@@ -2,6 +2,11 @@ import { expect, test } from '@playwright/test';
 
 test('launches, records distance, and resets', async ({ page }) => {
   await page.goto('/');
+  await page.locator('#attempt-count').fill('2');
+  await page.locator('#start-session-button').click();
+  await expect(page.locator('#setup-overlay')).toBeHidden();
+  await expect(page.locator('#attempt-progress')).toHaveText('Attempt 1 / 2');
+
   const canvas = page.locator('#game-canvas');
   await expect(canvas).toBeVisible();
 
@@ -34,6 +39,9 @@ test('mobile viewport keeps HUD readable and touch pointer cancel leaves fixed a
   await page.goto('/');
   await expect(page.locator('#hud')).toBeVisible();
   await expect(page.locator('#reset-button')).toBeVisible();
+  await page.locator('#attempt-count').fill('2');
+  await page.locator('#start-session-button').click();
+  await expect(page.locator('#setup-overlay')).toBeHidden();
 
   const canvas = page.locator('#game-canvas');
   const box = await canvas.boundingBox();
@@ -83,4 +91,28 @@ test('mobile viewport keeps HUD readable and touch pointer cancel leaves fixed a
 
   const afterScroll = await page.evaluate(() => window.scrollY);
   expect(afterScroll).toBe(beforeScroll);
+});
+
+test('shows sorted results after the configured attempts finish', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#attempt-count').fill('1');
+  await page.locator('#start-session-button').click();
+
+  const canvas = page.locator('#game-canvas');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    return;
+  }
+
+  const startX = box.x + box.width * 0.28;
+  const startY = box.y + box.height * 0.58;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX - 95, startY + 42, { steps: 8 });
+  await page.mouse.up();
+
+  await expect(page.locator('#results-overlay')).toBeVisible({ timeout: 20000 });
+  await expect(page.locator('#results-body')).toContainText('Attempt 1');
 });
