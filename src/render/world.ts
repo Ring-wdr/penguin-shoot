@@ -104,7 +104,7 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
       penguin.position.set(state.position.x, state.position.y + 0.55, 0);
       penguin.rotation.z = -state.position.x * 0.35;
 
-      const targetCameraX = calculateCameraTargetX(state.position.x, camera.right - camera.left);
+      const targetCameraX = calculateStateCameraTargetX(state, camera.right - camera.left);
       if (cameraTransition) {
         const elapsedMs = performance.now() - cameraTransition.startedAt;
         camera.position.x = calculateTransitionedCameraX(
@@ -155,7 +155,7 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
     transitionCameraToPenguin: (state, durationMs = ATTEMPT_CAMERA_TRANSITION_MS) => {
       cameraTransition = {
         fromX: camera.position.x,
-        toX: calculateCameraTargetX(state.position.x, camera.right - camera.left),
+        toX: calculateAimingCameraTargetX(state.position.x, camera.right - camera.left),
         startedAt: performance.now(),
         durationMs,
         reducedMotion: prefersReducedMotion(),
@@ -227,6 +227,19 @@ export function createMapItemVisual(item: MapItem): THREE.Group {
 export function calculateCameraTargetX(penguinX: number, visibleWorldWidth = CAMERA_WIDTH): number {
   const startCameraX = visibleWorldWidth < 10 ? penguinX + visibleWorldWidth * 0.25 : START_CAMERA_X;
   return Math.max(startCameraX, penguinX - 6);
+}
+
+export function calculateAimingCameraTargetX(penguinX: number, visibleWorldWidth = CAMERA_WIDTH): number {
+  const leftFramedCameraX = penguinX + visibleWorldWidth * 0.25;
+  return Math.max(leftFramedCameraX, calculateCameraTargetX(0, visibleWorldWidth));
+}
+
+function calculateStateCameraTargetX(state: GameState, visibleWorldWidth: number): number {
+  if (state.phase === 'aiming') {
+    return calculateAimingCameraTargetX(state.position.x, visibleWorldWidth);
+  }
+
+  return calculateCameraTargetX(state.position.x, visibleWorldWidth);
 }
 
 export function calculateTransitionedCameraX(

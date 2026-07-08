@@ -171,7 +171,7 @@ function integrateStep(state: GameState, deltaSeconds: number): void {
 
 function ensureMapItemsAhead(state: GameState): void {
   const targetX = state.position.x + ITEM_LOOKAHEAD_DISTANCE;
-  let farthestItemX = getFarthestItemX(state.mapItems);
+  let farthestItemX = getFarthestItemX(state.mapItems, state.startDistance);
 
   while (farthestItemX < targetX) {
     const random = createSeededRandom(Math.floor(farthestItemX * 1000) + state.mapItems.length * 97);
@@ -179,9 +179,9 @@ function ensureMapItemsAhead(state: GameState): void {
   }
 }
 
-function getFarthestItemX(items: MapItem[]): number {
+function getFarthestItemX(items: MapItem[], startDistance = 0): number {
   if (items.length === 0) {
-    return 14;
+    return sanitizeDistance(startDistance) + 14;
   }
 
   return Math.max(...items.map((item) => item.position.x));

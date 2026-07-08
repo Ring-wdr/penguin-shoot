@@ -189,6 +189,18 @@ describe('penguin launch simulation', () => {
     expect(state.mapItems.slice(6, 12).map((item) => item.type)).not.toEqual(state.mapItems.slice(0, 6).map((item) => item.type));
   });
 
+  it('generates missing map items ahead of a non-zero start distance after an empty reset snapshot', () => {
+    const state = createGameState(0, [], 100);
+    state.phase = 'flying';
+    state.position = { x: 100, y: 1 };
+    state.velocity = { x: 8, y: 0 };
+
+    stepGame(state, 1 / 60);
+
+    expect(state.mapItems.length).toBeGreaterThan(0);
+    expect(Math.min(...state.mapItems.map((item) => item.position.x))).toBeGreaterThanOrEqual(100);
+  });
+
   it('ice bomb launches the penguin forward and upward once', () => {
     const state = createGameState(0, [
       { id: 'bomb-test', type: 'ice-bomb', position: { x: 2, y: 0 }, radius: 0.9, consumed: false },

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { LAUNCHER_POSITION } from '../simulation/game';
 import {
   applyCameraFocus,
+  calculateAimingCameraTargetX,
   calculateCameraBounds,
   calculateCameraTargetX,
   calculateTransitionedCameraX,
@@ -35,6 +36,19 @@ describe('render world helpers', () => {
 
   it('keeps the launcher visible in narrow mobile framing', () => {
     expect(calculateCameraTargetX(LAUNCHER_POSITION.x, 5.5)).toBeCloseTo(1.38, 2);
+  });
+
+  it('frames a later aiming attempt with the penguin on the left side', () => {
+    expect(calculateAimingCameraTargetX(100, 24)).toBe(106);
+    expect(calculateAimingCameraTargetX(100, 5.5)).toBeCloseTo(101.38, 2);
+  });
+
+  it('moves from the flight follow camera to the next aiming camera target', () => {
+    const flightCameraX = calculateCameraTargetX(100, 24);
+    const aimingCameraX = calculateAimingCameraTargetX(100, 24);
+
+    expect(flightCameraX).toBe(94);
+    expect(aimingCameraX).toBeGreaterThan(flightCameraX);
   });
 
   it('projects the ground into the lower part of the viewport', () => {
