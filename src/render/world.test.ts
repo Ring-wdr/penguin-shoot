@@ -5,6 +5,7 @@ import {
   applyCameraFocus,
   calculateAimingCameraTargetX,
   calculateCameraBounds,
+  calculateCameraTargetForState,
   calculateCameraTargetX,
   calculateTransitionedCameraX,
   calculateWorldChunkCenters,
@@ -49,6 +50,28 @@ describe('render world helpers', () => {
 
     expect(flightCameraX).toBe(94);
     expect(aimingCameraX).toBeGreaterThan(flightCameraX);
+  });
+
+  it('keeps a relay launch from pulling the camera behind the aiming frame', () => {
+    const flyingAtStart = {
+      phase: 'flying' as const,
+      position: { x: 100, y: 0 },
+      velocity: { x: 1, y: 0 },
+      distance: 100,
+      startDistance: 100,
+      bestDistance: 100,
+      flightTime: 0,
+      lastImpactTime: -1,
+      mapItems: [],
+    };
+    const slightlyForward = {
+      ...flyingAtStart,
+      position: { x: 105, y: 0 },
+      distance: 105,
+    };
+
+    expect(calculateCameraTargetForState(flyingAtStart, 24)).toBe(106);
+    expect(calculateCameraTargetForState(slightlyForward, 24)).toBe(106);
   });
 
   it('projects the ground into the lower part of the viewport', () => {

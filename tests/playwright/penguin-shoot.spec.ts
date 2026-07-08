@@ -110,7 +110,7 @@ test('shows sorted results after the configured attempts finish', async ({ page 
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  await page.mouse.move(startX - 95, startY + 42, { steps: 8 });
+  await page.mouse.move(startX - 42, startY + 18, { steps: 6 });
   await page.mouse.up();
 
   await expect(page.locator('#results-overlay')).toBeVisible({ timeout: 20000 });

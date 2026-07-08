@@ -104,7 +104,7 @@ export function createRenderWorld(canvas: HTMLCanvasElement): RenderWorld {
       penguin.position.set(state.position.x, state.position.y + 0.55, 0);
       penguin.rotation.z = -state.position.x * 0.35;
 
-      const targetCameraX = calculateStateCameraTargetX(state, camera.right - camera.left);
+      const targetCameraX = calculateCameraTargetForState(state, camera.right - camera.left);
       if (cameraTransition) {
         const elapsedMs = performance.now() - cameraTransition.startedAt;
         camera.position.x = calculateTransitionedCameraX(
@@ -234,12 +234,13 @@ export function calculateAimingCameraTargetX(penguinX: number, visibleWorldWidth
   return Math.max(leftFramedCameraX, calculateCameraTargetX(0, visibleWorldWidth));
 }
 
-function calculateStateCameraTargetX(state: GameState, visibleWorldWidth: number): number {
+export function calculateCameraTargetForState(state: GameState, visibleWorldWidth: number): number {
+  const startFrameCameraX = calculateAimingCameraTargetX(state.startDistance, visibleWorldWidth);
   if (state.phase === 'aiming') {
     return calculateAimingCameraTargetX(state.position.x, visibleWorldWidth);
   }
 
-  return calculateCameraTargetX(state.position.x, visibleWorldWidth);
+  return Math.max(startFrameCameraX, calculateCameraTargetX(state.position.x, visibleWorldWidth));
 }
 
 export function calculateTransitionedCameraX(
