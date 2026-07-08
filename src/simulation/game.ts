@@ -57,7 +57,7 @@ const ITEM_TYPES: MapItemType[] = [
   'snow-tornado',
 ];
 
-export function createGameState(bestDistance = 0, mapItems = createMapItems(), startDistance = 0): GameState {
+export function createGameState(bestDistance = 0, mapItems: MapItem[] | undefined = undefined, startDistance = 0): GameState {
   const safeStartDistance = sanitizeDistance(startDistance);
   return {
     phase: 'aiming',
@@ -68,11 +68,11 @@ export function createGameState(bestDistance = 0, mapItems = createMapItems(), s
     bestDistance,
     flightTime: 0,
     lastImpactTime: -1,
-    mapItems: cloneMapItems(mapItems),
+    mapItems: cloneMapItems(mapItems ?? createMapItems(undefined, safeStartDistance)),
   };
 }
 
-export function resetGame(state: GameState, startDistance = 0): void {
+export function resetGame(state: GameState, startDistance = 0, mapItems: MapItem[] | undefined = undefined): void {
   const safeStartDistance = sanitizeDistance(startDistance);
   state.phase = 'aiming';
   state.position = { x: safeStartDistance, y: LAUNCHER_POSITION.y };
@@ -81,14 +81,15 @@ export function resetGame(state: GameState, startDistance = 0): void {
   state.startDistance = safeStartDistance;
   state.flightTime = 0;
   state.lastImpactTime = -1;
-  state.mapItems = createMapItems();
+  state.mapItems = cloneMapItems(mapItems ?? createMapItems(undefined, safeStartDistance));
 }
 
-export function createMapItems(seed = Math.floor(Math.random() * 1_000_000)): MapItem[] {
+export function createMapItems(seed = Math.floor(Math.random() * 1_000_000), startDistance = 0): MapItem[] {
   const random = createSeededRandom(seed);
   const items: MapItem[] = [];
+  const safeStartDistance = sanitizeDistance(startDistance);
 
-  appendRandomizedMapItemBatch(items, random, 14 + random() * 8);
+  appendRandomizedMapItemBatch(items, random, safeStartDistance + 14 + random() * 8);
   return items;
 }
 

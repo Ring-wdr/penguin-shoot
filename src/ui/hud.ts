@@ -9,6 +9,7 @@ export type HudElements = {
 
 export type HudState = {
   distance: number;
+  startDistance?: number;
   bestDistance: number;
   phase: GamePhase;
   attemptNumber?: number;
@@ -47,7 +48,7 @@ export function createHud(elements: HudElements): Hud {
         elements.attemptProgressElement.textContent =
           state.attemptNumber && state.totalAttempts ? `Attempt ${state.attemptNumber} / ${state.totalAttempts}` : '';
       }
-      elements.resetButton.disabled = state.phase === 'aiming' && state.distance === 0;
+      elements.resetButton.disabled = state.phase === 'aiming' && state.distance === (state.startDistance ?? 0);
     },
     onReset: (handler) => {
       elements.resetButton.addEventListener('click', handler);

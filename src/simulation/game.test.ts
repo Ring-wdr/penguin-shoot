@@ -117,6 +117,23 @@ describe('penguin launch simulation', () => {
     expect(state.position).toEqual({ x: 100, y: LAUNCHER_POSITION.y });
     expect(state.distance).toBe(100);
     expect(state.bestDistance).toBe(140);
+    expect(state.mapItems.every((item) => item.position.x >= 100)).toBe(true);
+  });
+
+  it('can reset to a saved map snapshot without regenerating old path items', () => {
+    const savedMapItems = [
+      { id: 'future-bomb', type: 'ice-bomb' as const, position: { x: 124, y: 0 }, radius: 0.9, consumed: false },
+      { id: 'future-geyser', type: 'geyser-vent' as const, position: { x: 148, y: 0 }, radius: 0.9, consumed: true },
+    ];
+    const state = createGameState();
+
+    resetGame(state, 100, savedMapItems);
+    savedMapItems[0].consumed = true;
+
+    expect(state.position).toEqual({ x: 100, y: LAUNCHER_POSITION.y });
+    expect(state.mapItems.map((item) => item.id)).toEqual(['future-bomb', 'future-geyser']);
+    expect(state.mapItems.every((item) => item.position.x >= 100)).toBe(true);
+    expect(state.mapItems[0].consumed).toBe(false);
   });
 
   it('predicts a readable trajectory without mutating state', () => {

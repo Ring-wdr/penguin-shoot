@@ -7,6 +7,7 @@ import {
   predictTrajectory,
   resetGame,
   stepGame,
+  type MapItem,
   type Vec2,
 } from './simulation/game';
 import {
@@ -69,11 +70,15 @@ let isRunning = true;
 let isWorldDisposed = false;
 let session: RelaySession | null = null;
 let recordedSettledAttempt = false;
+let attemptStartMapItems = cloneMapItems(state.mapItems);
 
 hud.onReset(() => {
   const currentAttempt = session ? getCurrentAttempt(session) : null;
-  resetGame(state, currentAttempt?.startDistance ?? 0);
+  resetGame(state, currentAttempt?.startDistance ?? 0, attemptStartMapItems);
   recordedSettledAttempt = false;
+  if (currentAttempt) {
+    world.transitionCameraToPenguin(state);
+  }
   hud.update(getHudState());
 });
 
@@ -83,6 +88,7 @@ overlays.onStart((attemptCount) => {
   overlays.hideSetup();
   overlays.hideResults();
   resetGame(state, 0);
+  attemptStartMapItems = cloneMapItems(state.mapItems);
   hud.update(getHudState());
 });
 
@@ -91,6 +97,7 @@ overlays.onPlayAgain(() => {
   recordedSettledAttempt = false;
   overlays.hideResults();
   resetGame(state, 0);
+  attemptStartMapItems = cloneMapItems(state.mapItems);
   overlays.showSetup();
   hud.update(getHudState());
 });
@@ -219,7 +226,8 @@ function handleSettledAttempt(): void {
 
   const nextAttempt = getCurrentAttempt(session);
   if (nextAttempt) {
-    resetGame(state, nextAttempt.startDistance);
+    attemptStartMapItems = cloneMapItemsFromStart(state.mapItems, nextAttempt.startDistance);
+    resetGame(state, nextAttempt.startDistance, attemptStartMapItems);
     world.transitionCameraToPenguin(state);
     recordedSettledAttempt = false;
   }
@@ -245,4 +253,15 @@ function shutdown(): void {
     isWorldDisposed = true;
     world.dispose();
   }
+}
+
+function cloneMapItems(items: MapItem[]): MapItem[] {
+  return items.map((item) => ({
+    ...item,
+    position: { ...item.position },
+  }));
+}
+
+function cloneMapItemsFromStart(items: MapItem[], startDistance: number): MapItem[] {
+  return cloneMapItems(items).filter((item) => item.position.x >= startDistance);
 }
