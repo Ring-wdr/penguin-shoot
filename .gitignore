@@ -10,3 +10,7 @@ Thumbs.db
 node_modules/
 _site/
 *.log
+dist/
+test-results/
+playwright-report/
+.claude/
