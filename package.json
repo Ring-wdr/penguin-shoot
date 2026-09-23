@@ -1,0 +1,22 @@
+{
+  "name": "penguin-shoot",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "montecarlo": "node scripts/montecarlo.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  },
+  "dependencies": {
+    "three": "^0.186.0"
+  }
+}
