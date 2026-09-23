@@ -23,13 +23,22 @@
 
 ## 구성
 
-- `index.html` 파일 하나로 된 게임입니다. 빌드 과정이 없습니다.
-- Three.js r149(jsDelivr CDN)를 사용하고, 캐릭터와 지형은 모두 코드로 모델링했습니다.
+- Vite + ES 모듈. 게임 로직(`src/core/`)은 three·DOM과 분리된 순수 JS이고, 3D 연출(`src/scene/`, `src/models/`, `src/view.js`)은 로직 상태를 읽어서 그립니다.
+- Three.js(npm)를 사용하고, 캐릭터와 지형은 모두 코드로 모델링했습니다.
 - 효과음은 Web Audio로 실시간 합성하고, 기록은 브라우저 localStorage에 저장합니다.
 
-로컬에서는 `index.html`을 브라우저로 열면 바로 실행됩니다.
+## 개발
+
+```bash
+npm install
+npm run dev          # http://localhost:5173/penguin-shoot/
+npm test             # Vitest: 판정·코스·상태 머신·비거리 분포 회귀
+npm run test:e2e     # Playwright 스모크 (처음엔 npx playwright install chromium)
+npm run montecarlo   # 비거리 분포 측정 (기본 400판)
+npm run build        # dist/
+```
 
 ## 배포
 
-`main` 브랜치에 푸시하면 `.github/workflows/deploy-pages.yml`이 GitHub Pages로 자동 배포합니다.
+`main` 브랜치에 푸시하면 `.github/workflows/deploy-pages.yml`이 테스트 → 빌드 → GitHub Pages 배포를 진행합니다.
 (저장소 Settings → Pages → Source: **GitHub Actions**)
